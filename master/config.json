@@ -1,4 +1,5 @@
 {
+    "LogDir": "log",
     "Hosts" : [
         {
             "id": 0,
