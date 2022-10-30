@@ -1,0 +1,7 @@
+{
+    "Hosts" : {
+      "type": "secondary",
+      "id": 1, 
+      "port": 8081
+    }
+  }
