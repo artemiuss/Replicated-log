@@ -16,7 +16,7 @@
             "id": 2,
             "name": "Secondary #2",                        
             "type": "secondary",
-            "port": 8081
+            "port": 8082
         }
     ]
   }
