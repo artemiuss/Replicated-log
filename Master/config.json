@@ -1,7 +1,22 @@
 {
-    "Hosts" : {
-      "type": "secondary",
-      "id": 1, 
-      "port": 8081
-    }
+    "Hosts" : [
+        {
+            "id": 0,
+            "name": "Master",
+            "type": "master",
+            "port": 8081
+        },        
+        {
+            "id": 1,
+            "name": "Secondary #1",            
+            "type": "secondary",
+            "port": 8081
+        },
+        {
+            "id": 2,
+            "name": "Secondary #2",                        
+            "type": "secondary",
+            "port": 8081
+        }
+    ]
   }
