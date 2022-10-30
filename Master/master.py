@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
+import os
 import time
+import logging
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from io import BytesIO
 
