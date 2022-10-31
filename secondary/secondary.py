@@ -14,17 +14,17 @@ with open("config.yaml", "r") as f:
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     command_list = []
 
-    def do_get(self):
+    def do_GET(self):
         self.send_response(200)
         self.send_header('Content-Type', 'text/plain; charset=utf-8')
         self.end_headers()
-        self.wfile.write(json.dumps(self.command_list).encode(encoding='utf_8'))
+        self.wfile.write(json.dumps(self.command_list).encode())
 
-    def do_post(self):
+    def do_POST(self):
         content_length = int(self.headers['Content-Length'])
         post_body = self.rfile.read(content_length)
 
-        self.command_list.append(post_body)
+        self.command_list.append(str(post_body))
         self.send_response(200)
         self.send_header('Content-Type', 'text/plain; charset=utf-8')
         self.end_headers()
@@ -36,7 +36,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(response.getvalue())
 
 
-def run_http_server(server_class=HTTPServer, handler_class=SimpleHTTPRequestHandler):
+def run_HTTP_server(server_class=HTTPServer, handler_class=SimpleHTTPRequestHandler):
 
     log_dir = config['log_dir']
     logfile_name = datetime.now().strftime('secondary_%Y-%m-%d_%H-%M-%S.log')
@@ -51,5 +51,5 @@ def run_http_server(server_class=HTTPServer, handler_class=SimpleHTTPRequestHand
 
 if __name__ == '__main__':
 
-    run_http_server()
+    run_HTTP_server()
 
