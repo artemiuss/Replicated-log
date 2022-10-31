@@ -1,9 +1,11 @@
 import logging
 import json
 import os
+import time
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from io import BytesIO
+from tkinter import Tk
 
 from airflow.utils import yaml
 
@@ -36,17 +38,24 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(response.getvalue())
 
 
+def keep_running():
+    return True
+
+
 def run_HTTP_server(server_class=HTTPServer, handler_class=SimpleHTTPRequestHandler):
 
     log_dir = config['log_dir']
     logfile_name = datetime.now().strftime('secondary_%Y-%m-%d_%H-%M-%S.log')
     logfile_path = os.path.join(log_dir, logfile_name)
+    print(logfile_path)
     logging.basicConfig(filename=logfile_path, format='%(asctime)s %(message)s', level=logging.INFO)
 
     logging.info('Secondary host has been started')
 
     httpd = HTTPServer(('', config['port']), SimpleHTTPRequestHandler)
-    httpd.serve_forever()
+    while keep_running():
+        time.sleep(config['delay'])
+        httpd.handle_request()
 
 
 if __name__ == '__main__':
