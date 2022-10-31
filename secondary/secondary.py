@@ -5,7 +5,6 @@ import time
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from io import BytesIO
-from tkinter import Tk
 
 from airflow.utils import yaml
 
