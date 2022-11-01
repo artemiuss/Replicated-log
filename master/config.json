@@ -5,18 +5,21 @@
             "id": 0,
             "name": "Master",
             "type": "master",
+            "host": "localhost",
             "port": 8081
         },        
         {
             "id": 1,
             "name": "Secondary #1",            
             "type": "secondary",
+            "host": "localhost",
             "port": 8081
         },
         {
             "id": 2,
             "name": "Secondary #2",                        
             "type": "secondary",
+            "host": "localhost",            
             "port": 8082
         }
     ]
