@@ -18,13 +18,17 @@ def get_config(key):
 """
 HTTP-server
 """
+
+
+
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.send_header('Content-Type', 'text/plain; charset=utf-8')
         self.end_headers()
-        self.wfile.write(b'Hello, world!')
-        
+        logging.info(f'{self.address_string()} GET = List messages: ')
+        self.wfile.write(b'List of messages:')
+
     def do_POST(self):
         content_length = int(self.headers['Content-Length'])
         body = self.rfile.read(content_length)
@@ -32,10 +36,13 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'text/plain; charset=utf-8')        
         self.end_headers()
         response = BytesIO()
-        response.write(b'This is POST request.')
-        response.write(b'Received: ')
-        response.write(body)
+        response.write(b'Received:\n' + body)
         self.wfile.write(response.getvalue())
+        logging.info(f'{self.address_string()} POST = Append message: {body.decode("utf-8")}')
+
+    def log_message(self, format, *args):
+        #logging.info("%s %s" % (self.address_string(),format%args))
+        pass
 
 def run_HTTP_server(server_class=HTTPServer, handler_class=SimpleHTTPRequestHandler):
     hosts = get_config("Hosts")
