@@ -4,6 +4,9 @@ from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from io import BytesIO
 
+"""
+Read config
+"""
 def get_config(working_dir_path, key):
     with open('config.json') as json_file:
         try:
@@ -35,9 +38,13 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(response.getvalue())
 
 def run_HTTP_server(server_class=HTTPServer, handler_class=SimpleHTTPRequestHandler):
+    logging.info('HTTP server started and listening on port...')
     httpd = HTTPServer(('', 8080), SimpleHTTPRequestHandler)
     httpd.serve_forever()
 
+"""
+Main
+"""
 def main():
     """
     The Main
