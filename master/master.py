@@ -2,7 +2,6 @@
 import sys, os, json, time, logging
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from io import BytesIO
 
 def get_config(key):
     """
@@ -19,29 +18,63 @@ def get_config(key):
 HTTP-server
 """
 
-
+dict_log = {}
+dict_log[1] = "qqq"
+dict_log[2] = "zzz"
+#dict_log_enc = json.dumps(dict_log, indent=2).encode('utf-8')
+#print(dict_log_enc)
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-Type', 'text/plain; charset=utf-8')
-        self.end_headers()
-        logging.info(f'{self.address_string()} GET = List messages: ')
-        self.wfile.write(b'List of messages:')
+        logging.info(f'{self.address_string()} GET [List messages]')
+        try:
+            dict_log_str = json.dumps(dict_log, indent=2)
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Server', 'Master')
+            self.end_headers()            
+            self.wfile.write(b'List of messages:' + dict_log_str.encode('utf-8') + 1)
+            logging.info(f'List of messages: {dict_log_str}')
+        except Exception as e:
+            logging.error(f"Exception: {e}", stack_info=True)
+            self.send_response(500)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Server', 'Master')
+            self.end_headers()
+            self.wfile.write(f"Exception: {e}".encode('utf-8'))     
+            raise
 
     def do_POST(self):
-        content_length = int(self.headers['Content-Length'])
-        body = self.rfile.read(content_length)
-        self.send_response(200)
-        self.send_header('Content-Type', 'text/plain; charset=utf-8')        
-        self.end_headers()
-        response = BytesIO()
-        response.write(b'Received:\n' + body)
-        self.wfile.write(response.getvalue())
-        logging.info(f'{self.address_string()} POST = Append message: {body.decode("utf-8")}')
+        logging.info(f'{self.address_string()} POST [Append message')
+        try:
+            content_length = int(self.headers['Content-Length'])
+            body = self.rfile.read(content_length)
+            logging.info(f'Received: {body.decode("utf-8")}')    
+
+            #validate input
+            #if test expression:
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Server', 'Master')
+            self.end_headers()
+            self.wfile.write(b'Received:\n' + body)
+            #else:
+                #logging.error(f"Invalid input")   
+                #описать формат
+                #self.send_response(400)
+                #self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                #self.send_header('Server', 'Master')
+                #self.end_headers()
+        except Exception as e:
+            logging.error(f"Exception: {e}")
+            self.send_response(500)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Server', 'Master')
+            self.end_headers()
+            self.wfile.write(f"Exception: {e}".encode('utf-8'))  
+            raise                  
 
     def log_message(self, format, *args):
-        #logging.info("%s %s" % (self.address_string(),format%args))
         pass
 
 def run_HTTP_server(server_class=HTTPServer, handler_class=SimpleHTTPRequestHandler):
@@ -59,14 +92,16 @@ def main():
     The Main
     """
     logging.info('Master host has been started')
-    #while True:
-    #    time.sleep(10)
-
-    run_HTTP_server();
-
+    try:
+        run_HTTP_server();
+    except Exception as e:
+        logging.error(f"Exception: {e}")
+        raise
+    
 if __name__ == '__main__':
     log_dir = get_config("LogDir")
     logfile_name = datetime.now().strftime('master_%Y-%m-%d_%H-%M-%S.log')
     logfile_path = os.path.join(log_dir, logfile_name)
-    logging.basicConfig(filename=logfile_path, format='%(asctime)s %(message)s', level=logging.INFO)
+    #%(funcName)s:%(lineno)d
+    logging.basicConfig(filename=logfile_path, format='%(asctime)s %(levelname)s %(message)s', level=logging.INFO)
     main()
