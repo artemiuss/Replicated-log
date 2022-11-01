@@ -4,10 +4,10 @@ from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from io import BytesIO
 
-"""
-Read config
-"""
-def get_config(working_dir_path, key):
+def get_config(key):
+    """
+    Read config
+    """
     with open('config.json') as json_file:
         try:
             dict_conf = json.load(json_file)
@@ -38,8 +38,10 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(response.getvalue())
 
 def run_HTTP_server(server_class=HTTPServer, handler_class=SimpleHTTPRequestHandler):
-    logging.info('HTTP server started and listening on port...')
-    httpd = HTTPServer(('', 8080), SimpleHTTPRequestHandler)
+    hosts = get_config("Hosts")
+    master_port = [e.get("port") for e in hosts if e.get("type") == "master"][0]
+    httpd = HTTPServer(('', master_port), SimpleHTTPRequestHandler)
+    logging.info(f'HTTP server started and listening on {master_port}')
     httpd.serve_forever()
 
 """
@@ -50,14 +52,13 @@ def main():
     The Main
     """
     logging.info('Master host has been started')
-
     #while True:
     #    time.sleep(10)
 
     run_HTTP_server();
 
 if __name__ == '__main__':
-    log_dir = get_config("", "LogDir")
+    log_dir = get_config("LogDir")
     logfile_name = datetime.now().strftime('master_%Y-%m-%d_%H-%M-%S.log')
     logfile_path = os.path.join(log_dir, logfile_name)
     logging.basicConfig(filename=logfile_path, format='%(asctime)s %(message)s', level=logging.INFO)
