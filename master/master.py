@@ -2,6 +2,7 @@
 import sys, os, json, time, logging
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from jsonschema import validate
 
 def get_config(key):
     """
@@ -26,53 +27,65 @@ dict_log[2] = "zzz"
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        logging.info(f'{self.address_string()} GET [List messages]')
+        logging.info(f'{self.address_string()} requested list of messages')
         try:
             dict_log_str = json.dumps(dict_log, indent=2)
+            response = b'List of messages:' + dict_log_str.encode('utf-8')
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Server', 'Master')
             self.end_headers()            
-            self.wfile.write(b'List of messages:' + dict_log_str.encode('utf-8') + 1)
-            logging.info(f'List of messages: {dict_log_str}')
+            self.wfile.write(response)
+            logging.info(f'Returned list of messages: {dict_log_str}')
         except Exception as e:
-            logging.error(f"Exception: {e}", stack_info=True)
+            response = f"Exception: {e}".encode('utf-8')
             self.send_response(500)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Server', 'Master')
             self.end_headers()
-            self.wfile.write(f"Exception: {e}".encode('utf-8'))     
-            raise
+            self.wfile.write(response)     
+            logging.error(f"Exception: {e}", stack_info=debug)
 
     def do_POST(self):
-        logging.info(f'{self.address_string()} POST [Append message')
+        logging.info(f'{self.address_string()} sent a request to append message')
+        post_request_schema = {
+            "type": "object",
+            "properties": {
+                "name": {"msg": "string"},
+            },
+            "required": ["msg"],
+        }
+        
         try:
             content_length = int(self.headers['Content-Length'])
-            body = self.rfile.read(content_length)
-            logging.info(f'Received: {body.decode("utf-8")}')    
+            body = self.rfile.read(content_length).decode("utf-8")
 
-            #validate input
-            #if test expression:
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/plain; charset=utf-8')
-            self.send_header('Server', 'Master')
-            self.end_headers()
-            self.wfile.write(b'Received:\n' + body)
-            #else:
-                #logging.error(f"Invalid input")   
-                #описать формат
-                #self.send_response(400)
-                #self.send_header('Content-Type', 'text/plain; charset=utf-8')
-                #self.send_header('Server', 'Master')
-                #self.end_headers()
+            #Validate input
+            try:
+                validate(instance=json.loads(body), schema=post_request_schema)
+                response = f'Received message {body} has been added to log'.encode('utf-8')
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                self.send_header('Server', 'Master')
+                self.end_headers()
+                self.wfile.write(response)
+                logging.info(f'Received message {body} has been added to log')    
+            except Exception as e:
+                response = f"Invalid POST request. Server accepts HTTP POST requests containing JSON of the following schema: {{\"msg\": \"message\"}}. Exception: {e}".encode('utf-8')                
+                self.send_response(400)
+                self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                self.send_header('Server', 'Master')
+                self.end_headers()
+                self.wfile.write(response)
+                logging.error(f"Invalid POST request. Received message {body} has incorrect form. Exception: {e}", stack_info=debug)
         except Exception as e:
-            logging.error(f"Exception: {e}")
+            response = f"Exception: {e}".encode('utf-8')            
             self.send_response(500)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Server', 'Master')
             self.end_headers()
-            self.wfile.write(f"Exception: {e}".encode('utf-8'))  
-            raise                  
+            self.wfile.write(response)  
+            logging.error(f"Exception: {e}", stack_info=debug)
 
     def log_message(self, format, *args):
         pass
@@ -95,12 +108,14 @@ def main():
     try:
         run_HTTP_server();
     except Exception as e:
-        logging.error(f"Exception: {e}")
+        logging.error(f"Exception: {e}", stack_info=debug)
         raise
     
 if __name__ == '__main__':
+    debug = get_config("debug")
     log_dir = get_config("LogDir")
-    logfile_name = datetime.now().strftime('master_%Y-%m-%d_%H-%M-%S.log')
+    #logfile_name = datetime.now().strftime('master_%Y-%m-%d_%H-%M-%S.log')
+    logfile_name = datetime.now().strftime('master.log')
     logfile_path = os.path.join(log_dir, logfile_name)
     #%(funcName)s:%(lineno)d
     logging.basicConfig(filename=logfile_path, format='%(asctime)s %(levelname)s %(message)s', level=logging.INFO)

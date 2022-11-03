@@ -1,4 +1,5 @@
 {
+    "debug": true,
     "LogDir": "log",
     "Hosts" : [
         {
