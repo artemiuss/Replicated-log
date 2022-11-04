@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import sys, os, json, time, logging
+import sys, os, json, time, logging, requests
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from jsonschema import validate
@@ -8,23 +8,27 @@ def get_config(key):
     """
     Read config
     """
-    with open('config.json') as json_file:
+    with open(os.path.join(script_path,'config.json')) as json_file:
         try:
             dict_conf = json.load(json_file)
             return dict_conf[key]
         except:
             raise
 
+def replicate_msg(msg):
+    logging.info(f'Replicating the message on every Secondary server')
+
+    for secondary_host in secondary_hosts:
+        logging.info(f'Replicating the message on {secondary_host.get("name")} ({secondary_host.get("hostname")}:{secondary_host.get("port")})')
+        api_url = f'https:// {secondary_host.get("hostname")}:{secondary_host.get("port")}'
+        #request_body = {"userId": 1, "title": "Buy milk", "completed": False}
+        response = requests.post(api_url, json=request_body)
+        #print(response.json())
+        #ack
+
 """
 HTTP-server
 """
-
-dict_log = {}
-dict_log[1] = "qqq"
-dict_log[2] = "zzz"
-#dict_log_enc = json.dumps(dict_log, indent=2).encode('utf-8')
-#print(dict_log_enc)
-
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         logging.info(f'{self.address_string()} requested list of messages')
@@ -91,11 +95,17 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         pass
 
 def run_HTTP_server(server_class=HTTPServer, handler_class=SimpleHTTPRequestHandler):
-    hosts = get_config("Hosts")
     master_port = [e.get("port") for e in hosts if e.get("type") == "master"][0]
     httpd = HTTPServer(('', master_port), SimpleHTTPRequestHandler)
     logging.info(f'HTTP server started and listening on {master_port}')
     httpd.serve_forever()
+
+
+# Init for shared variables
+script_path = os.path.dirname(os.path.realpath(__file__))
+hosts = get_config("Hosts")
+secondary_hosts = list(filter(lambda host: host.get("type") == "secondary" and host.get("active") == 1, hosts))
+dict_log = {}
 
 """
 Main
@@ -116,7 +126,7 @@ if __name__ == '__main__':
     log_dir = get_config("LogDir")
     #logfile_name = datetime.now().strftime('master_%Y-%m-%d_%H-%M-%S.log')
     logfile_name = datetime.now().strftime('master.log')
-    logfile_path = os.path.join(log_dir, logfile_name)
+    logfile_path = os.path.join(script_path, log_dir, logfile_name)
     #%(funcName)s:%(lineno)d
     logging.basicConfig(filename=logfile_path, format='%(asctime)s %(levelname)s %(message)s', level=logging.INFO)
     main()

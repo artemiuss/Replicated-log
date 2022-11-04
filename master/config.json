@@ -6,22 +6,25 @@
             "id": 0,
             "name": "Master",
             "type": "master",
-            "host": "localhost",
-            "port": 8080
+            "hostname": "localhost",
+            "port": 8080,
+            "active": true
         },        
         {
             "id": 1,
             "name": "Secondary #1",            
             "type": "secondary",
-            "host": "localhost",
-            "port": 8081
+            "hostname": "localhost",
+            "port": 8081,
+            "active": true
         },
         {
             "id": 2,
             "name": "Secondary #2",                        
             "type": "secondary",
-            "host": "localhost",            
-            "port": 8082
+            "hostname": "localhost",            
+            "port": 8082,
+            "active": true            
         }
     ]
   }
