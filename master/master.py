@@ -67,7 +67,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         logging.info(f'{self.address_string()} sent a request to append message')
-                
+        #time.sleep(5)        
         try:
             content_length = int(self.headers['Content-Length'])
             body = self.rfile.read(content_length).decode("utf-8")
@@ -169,9 +169,6 @@ log_list = [
 ]
 """
 
-"""
-Main
-"""
 def main():
     """
     The Main
