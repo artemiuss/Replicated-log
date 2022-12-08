@@ -5,7 +5,6 @@ services:
       - "8080:8080"
     networks: 
       - my-net
-    #command: [ ]
 #  secondary:
 #    build: secondary
 #    ports:
@@ -14,7 +13,6 @@ services:
 #      - my-net
 #    depends_on: 
 #      - master
-#    command: [ ]
 #    deploy:
 #      replicas: 2
 networks:
