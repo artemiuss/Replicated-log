@@ -1,9 +1,11 @@
 FROM python:3
 
-VOLUME ["/code"]
-ADD . /code
-WORKDIR /code
+RUN pip install --root-user-action=ignore --no-cache-dir -r requirements.txt
 
-EXPOSE 5000
-#CMD ["python", "-m", "http.server", "5000"]
-CMD ["./1.py"]
+WORKDIR /app
+
+COPY . . 
+
+#EXPOSE 5000
+
+CMD [ "python", "./master.py"]

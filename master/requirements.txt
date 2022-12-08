@@ -1,0 +1,4 @@
+requests
+jsonschema
+tabulate
+multiprocessing_logging
