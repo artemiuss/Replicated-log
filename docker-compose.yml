@@ -1,16 +1,22 @@
 services:
   master:
     build: master
-    networks: my-net
+    ports:
+      - "8080:8080"
+    networks: 
+      - my-net
     #command: [ ]
-  secondary:
-    build: secondary
-    networks: my-net
-    depends_on: 
-      - master
-    #command: [ ]
-    #deploy:
-    #  replicas: 2
+#  secondary:
+#    build: secondary
+#    ports:
+#      - "8081:8081"
+#    networks: 
+#      - my-net
+#    depends_on: 
+#      - master
+#    command: [ ]
+#    deploy:
+#      replicas: 2
 networks:
   my-net:
-    name: my-net
+

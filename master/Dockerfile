@@ -1,11 +1,14 @@
 FROM python:3
 
-RUN pip install --root-user-action=ignore --no-cache-dir -r requirements.txt
+VOLUME /myvol
 
 WORKDIR /app
+RUN mkdir /app/log
 
 COPY . . 
 
-#EXPOSE 5000
+RUN pip install --root-user-action=ignore --no-cache-dir -r requirements.txt
 
-CMD [ "python", "./master.py"]
+EXPOSE 8080
+
+CMD ["python", "./master.py"]
