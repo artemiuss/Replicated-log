@@ -1,0 +1,16 @@
+services:
+  master:
+    container_name: master
+    build: master
+    networks: my-net
+    #command: [ ]
+  secondary:
+    container_name: secondary
+    build: secondary
+    networks: my-net
+    depends_on: 
+      - master
+    #command: [ ]
+networks:
+  my-net:
+    name: my-net
