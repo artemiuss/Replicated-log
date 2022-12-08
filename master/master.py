@@ -186,5 +186,14 @@ if __name__ == '__main__':
     #logfile_name = datetime.now().strftime('master_%Y-%m-%d_%H-%M-%S.log')
     logfile_name = datetime.now().strftime('master.log')
     logfile_path = os.path.join(script_path, log_dir, logfile_name)
-    logging.basicConfig(filename=logfile_path, format='%(asctime)s %(levelname)s %(message)s', level=logging.INFO)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    logging.basicConfig(
+        format='%(asctime)s %(levelname)s %(message)s',
+        level=logging.INFO,
+        handlers=[
+            logging.FileHandler(logfile_path),
+            logging.StreamHandler()
+        ]
+    )
     main()

@@ -3,7 +3,6 @@ FROM python:3
 VOLUME /myvol
 
 WORKDIR /app
-RUN mkdir /app/log
 
 COPY . . 
 
