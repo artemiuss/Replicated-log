@@ -12,8 +12,9 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()  
         response = BytesIO()        
         response.write(b'This is GET request. ')
-        response.write(b'Original URL: ')
+        response.write(b'Original URL:')
         response.write(self.path.encode('utf-8'))
+        response.write(b' \n')
         self.wfile.write(response.getvalue())
 
 
@@ -27,6 +28,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         response.write(b'This is POST request. ')
         response.write(b'Body: ')
         response.write(body)
+        response.write(b' \n')        
         self.wfile.write(response.getvalue())
 
 
