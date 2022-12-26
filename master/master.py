@@ -49,11 +49,12 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 log_list_str = tabulate(log_list_fmt, headers="keys")
                 response = log_list_str
             else:
-                response= 'The replication log is empty\n'
+                response = 'The replication log is empty'
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Server', 'Master')
-            self.end_headers()            
+            self.end_headers()
+            response = response + '\n'
             self.wfile.write(response.encode('utf-8'))
             logging.info(response)
         except Exception as e:
@@ -62,7 +63,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Server', 'Master')
             self.end_headers()
-            self.wfile.write(response.encode('utf-8'))     
+            response = response + '\n'
+            self.wfile.write(response.encode('utf-8'))
             logging.error(f"Exception: {e}", stack_info=debug)
 
     def do_POST(self):
@@ -100,6 +102,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 self.send_header('Content-Type', 'text/plain; charset=utf-8')
                 self.send_header('Server', 'Master')
                 self.end_headers()
+                response = response + '\n'                
                 self.wfile.write(response.encode('utf-8'))
                 logging.info(f'Received message id = {msg_id}, msg = \"{msg}\" has been succesfully replicated')
 
@@ -118,14 +121,16 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 self.send_header('Content-Type', 'text/plain; charset=utf-8')
                 self.send_header('Server', 'Master')
                 self.end_headers()
+                response = response + '\n'
                 self.wfile.write(response.encode('utf-8'))
                 logging.error(f"Invalid POST request. Received message {body} has incorrect form. Exception: {e}", stack_info=debug)
         except Exception as e:
-            response = f"Exception: {e}"            
+            response = f"Exception: {e}"
             self.send_response(500)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Server', 'Master')
             self.end_headers()
+            response = response + '\n'
             self.wfile.write(response.encode('utf-8'))  
             logging.error(response, stack_info=debug)
 
