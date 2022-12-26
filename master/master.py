@@ -2,6 +2,7 @@
 import sys, os, json, time, logging, requests
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from jsonschema import validate
 from tabulate import tabulate
 
@@ -33,9 +34,15 @@ def replicate_msg(msg):
 """
 HTTP-server
 """
+# Processing Simultaneous/Asynchronous Requests with Python BaseHTTPServer
+# https://stackoverflow.com/a/12651298
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    pass
+
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         logging.info(f'{self.address_string()} requested list of messages')
+        time.sleep(10)
         try:
             if log_list:
                 log_list_fmt = [ 
@@ -137,9 +144,9 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
-def run_HTTP_server(server_class=HTTPServer, handler_class=SimpleHTTPRequestHandler):
+def run_HTTP_server(server_class=ThreadedHTTPServer, handler_class=SimpleHTTPRequestHandler):
     master_port = [e.get("port") for e in hosts if e.get("type") == "master"][0]
-    httpd = HTTPServer(('', master_port), SimpleHTTPRequestHandler)
+    httpd = ThreadedHTTPServer(('', master_port), SimpleHTTPRequestHandler)
     logging.info(f'HTTP server started and listening on {master_port}')
     httpd.serve_forever()
 
