@@ -6,7 +6,7 @@ Team 6:
 - Nikita Korsun
 
 ## Simple Echo-Server application
-`echo-server.py` -- implementation of simple Echo-Server application. Accept requests on the 8080 port. Supports only GET and POST requests.
+The `echo-server.py` implements simple Echo-Server application. Accept requests on the *8080* port. Supports only GET and POST requests.
 
 ### Usage notes
 1. Start Echo-Server application
@@ -31,12 +31,28 @@ curl -X POST localhost:8080 -H 'Content-Type: application/json' -d '{"key1":"val
 ```
 
 ## Replicated log
-- 
+The Replicated Log implementation with the following architecture: one Master and any number of Secondaries.
 
-Usage notes:
+### Usage notes:
+1. Setting up
 ```
 docker-compose up
 ```
-master port
-secondery port
-json
+2. Master
+Master exposes simple HTTP server on *8080* port with: 
+- GET method - returns all messages from the in-memory list
+```
+curl localhost:8080
+```
+- POST method - appends a message into the in-memory list and accepts the following JSON format: `{"msg":"value1"}`
+```
+curl -X POST localhost:8080 -H 'Content-Type: application/json' -d '{"msg":"test value 1"}'
+```
+
+3. Secondaries
+Secondary exposes simple  HTTP server *8081,8082,...* ports with:
+- GET method - returns all replicated messages from the in-memory list
+```
+curl localhost:8081
+curl localhost:8082
+```

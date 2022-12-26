@@ -49,7 +49,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 log_list_str = tabulate(log_list_fmt, headers="keys")
                 response = log_list_str
             else:
-                response= 'The replication log is empty'
+                response= 'The replication log is empty\n'
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Server', 'Master')
