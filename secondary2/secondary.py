@@ -62,9 +62,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
-
 def run_HTTP_server(server_class=ThreadedHTTPServer, handler_class=SimpleHTTPRequestHandler):
-    secondary_port = [e.get("port") for e in hosts if e.get("type") == "master" and e.get("Secondary #2")][0]
+    secondary_port = [e.get("port") for e in hosts if e.get("type") == "secondary" and e.get("id") == int(secondary_id)][0]
     httpd = ThreadedHTTPServer(('', secondary_port), SimpleHTTPRequestHandler)
     logging.info(f'HTTP server started and listening on {secondary_port}')
     httpd.serve_forever()
@@ -87,6 +86,11 @@ def main():
         raise
 
 if __name__ == '__main__':
+    sys_ags = sys.argv
+    if len(sys.argv) == 1:
+        sys.exit("Please provide the Sedondary id (1 or 2) as first argument")
+    secondary_id = sys_ags[1]
+
     debug = get_config("debug")
     logfile_name = datetime.now().strftime('secondary.log')
     logfile_path = os.path.join(script_path, logfile_name)
