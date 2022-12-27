@@ -206,12 +206,8 @@ def main():
     
 if __name__ == '__main__':
     debug = get_config("debug")
-    log_dir = get_config("LogDir")
-    #logfile_name = datetime.now().strftime('master_%Y-%m-%d_%H-%M-%S.log')
     logfile_name = datetime.now().strftime('master.log')
-    logfile_path = os.path.join(script_path, log_dir, logfile_name)
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    logfile_path = os.path.join(script_path, logfile_name)
     logging.basicConfig(
         format='%(asctime)s %(levelname)s %(message)s',
         level=logging.INFO,

@@ -1,6 +1,5 @@
 {
     "debug": true,
-    "LogDir": "log",
     "Hosts" : [
         {
             "id": 0,
