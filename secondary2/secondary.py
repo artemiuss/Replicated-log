@@ -65,7 +65,9 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             content_length = int(self.headers['Content-Length'])
             body = self.rfile.read(content_length).decode("utf-8")
             msg_dict = json.loads(body)
-            
+
+            # append new message to log
+            log_list.append(msg_dict)            
             logging.info(f"Received message \"" + msg_dict["msg"] + "\" has been added to log with id: " + str(msg_dict["id"]))
             
             response = f"The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated"            
@@ -120,7 +122,7 @@ if __name__ == '__main__':
     secondary_id = sys_ags[1]
 
     debug = get_config("debug")
-    logfile_name = datetime.now().strftime('secondary.log')
+    logfile_name = datetime.now().strftime(f"secondary{secondary_id}.log")
     logfile_path = os.path.join(script_path, logfile_name)
     logging.basicConfig(
         format='%(asctime)s %(levelname)s %(message)s',

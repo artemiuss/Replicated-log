@@ -72,7 +72,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             process = multiprocessing.current_process()
 
             try:
-                response = requests.post(url, json=msg_dict, timeout=60)
+                response = requests.post(url, json=msg_dict)
                 repl_status_dict[secondary_host["id"]] = response.status_code
                 #if response.status_code == 200:
                 #    logging.info(f'[{process.pid}]: ...')
@@ -114,12 +114,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             log_list_last_id = log_list[-1].get("id") if log_list else 0
             msg_id = log_list_last_id + 1
             msg_ts = time.time()
-            # append new message to log
             msg_dict = {"id": msg_id, "msg": msg, "replicated_ts" : msg_ts}
-            log_list.append(msg_dict)
-            # release the lock
-            self.lock.release()                    
-            logging.info(f"Received message \"" + msg_dict["msg"] + "\" has been added to log with id: " + str(msg_dict["id"]))
 
             # trying to replicate message on every Secondary server
             logging.info(f'Replicating the message on every Secondary server')
@@ -137,6 +132,12 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 proc.join()
                 logging.info(f"END process [{proc.pid}] {proc.name}")
 
+            # append new message to log
+            log_list.append(msg_dict)
+            # release the lock
+            self.lock.release()                    
+            logging.info(f"Received message \"" + msg_dict["msg"] + "\" has been added to log with id: " + str(msg_dict["id"]))
+
             response = f"The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated"
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
@@ -145,7 +146,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))
             logging.info(response)   
-
         except Exception as e:
             response = f"Exception: {e}"
             self.send_response(500)
