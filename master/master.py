@@ -9,6 +9,8 @@ from tabulate import tabulate
 from multiprocessing.pool import ThreadPool
 import multiprocessing_logging
 
+from threading import Lock
+
 def get_config(key):
     """
     Read config
@@ -40,9 +42,12 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     pass
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
+    # create a lock
+    # https://stackoverflow.com/questions/18279941/maintaining-log-file-from-multiple-threads-in-python
+    lock = Lock()
+
     def do_GET(self):
         logging.info(f'{self.address_string()} requested list of messages')
-        time.sleep(10)
         try:
             if log_list:
                 log_list_fmt = [ 
@@ -75,8 +80,10 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             logging.error(f"Exception: {e}", stack_info=debug)
 
     def do_POST(self):
+        # acquire the lock
+        self.lock.acquire()
+
         logging.info(f'{self.address_string()} sent a request to append message')
-        #time.sleep(5)        
         try:
             content_length = int(self.headers['Content-Length'])
             body = self.rfile.read(content_length).decode("utf-8")
@@ -98,11 +105,13 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 log_list_last_id = log_list[-1].get("id") if log_list else 0
                 # append new message to log
                 msg_id = log_list_last_id + 1
+
                 ts = time.time()
                 log_list.append({"id": msg_id, "msg": msg, "created_ts" : ts})
                 logging.info(f'Received message \"{msg}\" has been added to log with id: {msg_id}')
                 # trying to replicate message on every Secondary server
                 logging.info(f'Replicating message id = {msg_id}, msg = \"{msg}\" on ...')
+                #replicate_msg()
 
                 response = f'Received message id = {msg_id}, msg = \"{msg}\" has been succesfully replicated'
                 self.send_response(200)
@@ -140,6 +149,9 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))  
             logging.error(response, stack_info=debug)
+        finally:
+            # release the lock
+            self.lock.release()        
 
     def log_message(self, format, *args):
         pass
