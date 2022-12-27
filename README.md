@@ -33,13 +33,17 @@ curl -X POST localhost:8080 -H 'Content-Type: application/json' -d '{"key1":"val
 ## Replicated log
 The Replicated Log implementation with the following architecture: one Master and any number of Secondaries.
 
+Master exposes simple HTTP server on *8080* port.
+
+Secondary exposes simple HTTP server *8081* and *8082* ports with.
+
 ### Usage notes:
 1. Setting up
 ```
 docker-compose up
 ```
+
 2. Master
-Master exposes simple HTTP server on *8080* port with: 
 - GET method - returns all messages from the in-memory list
 ```
 curl localhost:8080
@@ -50,9 +54,14 @@ curl -X POST localhost:8080 -H 'Content-Type: application/json' -d '{"msg":"test
 ```
 
 3. Secondaries
-Secondary exposes simple  HTTP server *8081,8082,...* ports with:
 - GET method - returns all replicated messages from the in-memory list
 ```
 curl localhost:8081
 curl localhost:8082
 ```
+
+3. Clean-Up
+```
+docker-compose down --rmi 'all'
+```
+
