@@ -1,0 +1,29 @@
+{
+    "debug": true,
+    "Hosts" : [
+        {
+            "id": 0,
+            "name": "Master",
+            "type": "master",
+            "hostname": "localhost",
+            "port": 8080,
+            "active": true
+        },        
+        {
+            "id": 1,
+            "name": "Secondary #1",            
+            "type": "secondary",
+            "hostname": "localhost",
+            "port": 8081,
+            "active": true
+        },
+        {
+            "id": 2,
+            "name": "Secondary #2",                        
+            "type": "secondary",
+            "hostname": "localhost",            
+            "port": 8082,
+            "active": true            
+        }
+    ]
+  }

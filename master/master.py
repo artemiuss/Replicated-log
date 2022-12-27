@@ -80,6 +80,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 #    logging.info(f'[{process.pid}]: ...')    
             except Exception as e:
                 logging.error(f"[{process.pid}]: Exception: {e}", stack_info=debug)
+                raise
 
         logging.info(f'{self.address_string()} sent a request to append message')
         try:
