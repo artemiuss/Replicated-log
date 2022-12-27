@@ -44,7 +44,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 response = 'The replication log is empty'
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
-            self.send_header('Server', 'Master')
+            self.send_header('Server', 'Secondary')
             self.end_headers()
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))
@@ -53,14 +53,42 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             response = f"Exception: {e}"
             self.send_response(500)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
-            self.send_header('Server', 'Master')
+            self.send_header('Server', 'Secondary')
             self.end_headers()
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))
             logging.error(f"Exception: {e}", stack_info=debug)
 
+    def do_POST(self):
+        logging.info(f'{self.address_string()} sent a request to replicate message')
+        try:
+            content_length = int(self.headers['Content-Length'])
+            body = self.rfile.read(content_length).decode("utf-8")
+            msg_dict = json.loads(body)
+            
+            logging.info(f"Received message \"" + msg_dict["msg"] + "\" has been added to log with id: " + str(msg_dict["id"]))
+            
+            response = f"The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated"            
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Server', 'Secondary')
+            self.end_headers()
+            response = response + '\n'
+            self.wfile.write(response.encode('utf-8'))
+            logging.info(response)   
+        except Exception as e:
+            response = f"Exception: {e}"
+            self.send_response(500)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Server', 'Secondary')
+            self.end_headers()
+            response = response + '\n'
+            self.wfile.write(response.encode('utf-8'))  
+            logging.error(response, stack_info=debug)
+
     def log_message(self, format, *args):
         pass
+
 
 def run_HTTP_server(server_class=ThreadedHTTPServer, handler_class=SimpleHTTPRequestHandler):
     secondary_port = [e.get("port") for e in hosts if e.get("type") == "secondary" and e.get("id") == int(secondary_id)][0]

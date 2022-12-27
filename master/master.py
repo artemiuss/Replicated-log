@@ -119,7 +119,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             log_list.append(msg_dict)
             # release the lock
             self.lock.release()                    
-            logging.info(f'Received message \"{msg}\" has been added to log with id: {msg_id}')
+            logging.info(f"Received message \"" + msg_dict["msg"] + "\" has been added to log with id: " + str(msg_dict["id"]))
 
             # trying to replicate message on every Secondary server
             logging.info(f'Replicating the message on every Secondary server')
@@ -137,7 +137,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 proc.join()
                 logging.info(f"END process [{proc.pid}] {proc.name}")
 
-            response = f'The message msg_id = {msg_id}, msg = \"{msg}\" has been succesfully replicated'
+            response = f"The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated"
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Server', 'Master')
