@@ -34,9 +34,10 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                     {
                                         "id": msg.get("id"),
                                         "msg": msg.get("msg"),
+                                        "w": msg.get("w"),
                                         "replicated_ts" : datetime.utcfromtimestamp(msg.get("replicated_ts")).strftime("%Y-%m-%d %H:%M:%S.%f")
                                     } 
-                                for msg in log_list 
+                                for msg in log_list
                                 ]
                 log_list_str = tabulate(log_list_fmt, headers="keys", tablefmt="simple_grid")
                 response = 'The replication log:\n' + log_list_str
@@ -60,6 +61,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             logging.error(f"Exception: {e}", stack_info=debug)
 
     def do_POST(self):
+        time.sleep(10)
         logging.info(f'{self.address_string()} sent a request to replicate message')
         try:
             content_length = int(self.headers['Content-Length'])
@@ -67,6 +69,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             msg_dict = json.loads(body)
 
             # append new message to log
+            msg_dict["replicated_ts"] = time.time()
             log_list.append(msg_dict)            
             logging.info(f"Received message \"" + msg_dict["msg"] + "\" has been added to log with id: " + str(msg_dict["id"]))
             

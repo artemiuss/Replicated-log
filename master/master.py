@@ -40,9 +40,10 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                     {
                                         "id": msg.get("id"),
                                         "msg": msg.get("msg"),
-                                        "replicated_ts" : datetime.utcfromtimestamp(msg.get("replicated_ts")).strftime("%Y-%m-%d %H:%M:%S.%f")
+                                        "w": msg.get("w"),
+                                        "replicated_ts": datetime.utcfromtimestamp(msg.get("replicated_ts")).strftime("%Y-%m-%d %H:%M:%S.%f") if msg.get("replicated_ts") != None else "NOT REPLICATED"
                                     } 
-                                for msg in log_list 
+                                for msg in log_list
                                 ]
                 log_list_str = tabulate(log_list_fmt, headers="keys", tablefmt="simple_grid")
                 response = 'The replication log:\n' + log_list_str
@@ -70,17 +71,19 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             url = f'http://{secondary_host.get("hostname")}:{secondary_host.get("port")}'    
             host_id = secondary_host.get("id")        
             process = multiprocessing.current_process()
-
+            logging.info(f"START process [{process.pid}] {process.name}")
             try:
                 response = requests.post(url, json=msg_dict)
                 repl_status_dict[secondary_host["id"]] = response.status_code
                 if response.status_code == 200:
-                    logging.info(f"[{process.pid}]: The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated on " + secondary_host.get("name"))
+                    logging.info(f"      process [{process.pid}] The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated on " + secondary_host.get("name"))
                 else:
-                    logging.info(f"[{process.pid}]: Failed to replicate message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" on " + secondary_host.get("name"))
+                    logging.info(f"      process [{process.pid}] Failed to replicate message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" on " + secondary_host.get("name"))
             except Exception as e:
                 logging.error(f"[{process.pid}]: Exception: {e}", stack_info=debug)
                 repl_status_dict[secondary_host["id"]] = None
+            finally:
+                logging.info(f"END   process [{process.pid}] {process.name}")
 
         logging.info(f'{self.address_string()} sent a request to append message')
         try:
@@ -88,15 +91,17 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             body = self.rfile.read(content_length).decode("utf-8")
             body_dict = json.loads(body)
             msg = body_dict.get("msg")
+            w = body_dict.get("w")
 
             #Validate input
             try:
                 post_request_schema = {
                     "type": "object",
                     "properties": {
-                        "name": {"msg": "string"},
+                        "msg": {"type": "string"},
+                        "w": {"type": "integer"}, 
                     },
-                    "required": ["msg"],
+                    "required": ["msg"]
                 }
                 validate(instance=body_dict, schema=post_request_schema)
             except Exception as e:
@@ -113,53 +118,70 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.lock.acquire()            
             log_list_last_id = log_list[-1].get("id") if log_list else 0
             msg_id = log_list_last_id + 1
-            msg_ts = time.time()
-            msg_dict = {"id": msg_id, "msg": msg, "replicated_ts" : msg_ts}
+            msg_dict = {"id": msg_id, "msg": msg, "replicated_ts" : None, "w": w}
+            # append new message to log
+            log_list.append(msg_dict)
+            logging.info(f"Received message \"" + msg_dict["msg"] + "\" has been added to log with id: " + str(msg_dict["id"]))
+            # release the lock
+            self.lock.release()
+            
+            if w is None:
+                # Blocking mode (write concern has not been specified)
+                logging.info(f'Replicating the message in the BLOCKING MODE on every Secondary server')
+                manager = multiprocessing.Manager()
+                repl_status_dict = manager.dict()
+                procs = []
+                # trying to replicate message on every Secondary server
+                for secondary_host in secondary_hosts:
+                    p = multiprocessing.Process(target=replicate_msg, 
+                                                name="Replicating msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" on " + secondary_host.get("name"),
+                                                args=(secondary_host, msg_dict))
+                    procs.append(p)
+                    p.start()
+                for proc in procs:
+                    proc.join()
 
-            # trying to replicate message on every Secondary server
-            logging.info(f'Replicating the message on every Secondary server')
-            manager = multiprocessing.Manager()
-            repl_status_dict = manager.dict()
-            procs = []
-            for secondary_host in secondary_hosts:
-                p = multiprocessing.Process(target=replicate_msg, 
-                                            name="Replicating msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" on " + secondary_host.get("name"),
-                                            args=(secondary_host, msg_dict))
-                procs.append(p)
-                p.start()
-                logging.info(f"START process [{p.pid}] {p.name}")
-            for proc in procs:
-                proc.join()
-                logging.info(f"END process [{proc.pid}] {proc.name}")
+                #check replication results
+                is_repl_failed = False
+                for secondary_host in secondary_hosts:
+                    if repl_status_dict[secondary_host.get("id")] != 200:
+                        is_repl_failed = True
+                        break
+                if is_repl_failed == False:
+                    #set ts
+                    log_list[msg_id-1]["replicated_ts"] = time.time()
 
-            #check replication results
-            is_repl_failed = False
-            for secondary_host in secondary_hosts:
-                if repl_status_dict[secondary_host.get("id")] != 200:
-                    is_repl_failed = True
-                    break
-            if is_repl_failed == False:
-                # append new message to log
-                log_list.append(msg_dict)
-                logging.info(f"Received message \"" + msg_dict["msg"] + "\" has been added to log with id: " + str(msg_dict["id"]))
-
-                response = f"The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated"
-                self.send_response(200)
-                self.send_header('Content-Type', 'text/plain; charset=utf-8')
-                self.send_header('Server', 'Master')
-                self.end_headers()
-                response = response + '\n'
-                self.wfile.write(response.encode('utf-8'))
-                logging.info(response)                              
+                    response = f"The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated"
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                    self.send_header('Server', 'Master')
+                    self.end_headers()
+                    response = response + '\n'
+                    self.wfile.write(response.encode('utf-8'))
+                    logging.info(response)                              
+                else:
+                    response = f'Failed to replicate message: msg_id = {msg_id}, msg = \"{msg}\"'
+                    self.send_response(599)
+                    self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                    self.send_header('Server', 'Master')
+                    self.end_headers()
+                    response = response + '\n'
+                    self.wfile.write(response.encode('utf-8'))
+                    logging.info(response)
             else:
-                response = f'Failed to replicate message: msg_id = {msg_id}, msg = \"{msg}\"'
-                self.send_response(599)
-                self.send_header('Content-Type', 'text/plain; charset=utf-8')
-                self.send_header('Server', 'Master')
-                self.end_headers()
-                response = response + '\n'                
-                self.wfile.write(response.encode('utf-8'))
-                logging.info(response)
+                # Async mode
+                logging.info(f'Replicating the message in the ASYNC MODE with Write Concern parameter specified')
+                manager = multiprocessing.Manager()
+                repl_status_dict = manager.dict()
+                procs = []
+                # trying to replicate message on every Secondary server
+                for secondary_host in secondary_hosts:
+                    p = multiprocessing.Process(target=replicate_msg, 
+                                                name="Replicating msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" on " + secondary_host.get("name"),
+                                                args=(secondary_host, msg_dict))
+                    procs.append(p)
+                    p.start()
+
         except Exception as e:
             response = f"Exception: {e}"
             self.send_response(500)
@@ -169,9 +191,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))  
             logging.error(response, stack_info=debug)
-        finally:
-            # release the lock
-            self.lock.release()    
 
     def log_message(self, format, *args):
         pass

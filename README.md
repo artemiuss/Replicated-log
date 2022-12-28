@@ -48,9 +48,13 @@ docker-compose up
 ```
 curl localhost:8080
 ```
-- POST method - appends a message into the in-memory list and accepts the following JSON format: `{"msg":"value1"}`
+- POST method - appends a message *msg* into the in-memory list and accepts the following JSON format: `{"msg":"value1"}`
 ```
 curl -X POST localhost:8080 -H 'Content-Type: application/json' -d '{"msg":"test value 1"}'
+```
+- POST method - appends a message *msg* with write concern *w=1,2,3,..,n* into the in-memory list and accepts the following JSON format: `{"msg":"value1", "w":1,2,3,..,n}`
+```
+curl -X POST localhost:8080 -H 'Content-Type: application/json' -d '{"msg":"test value 1", "w":1}'
 ```
 
 3. Secondaries
