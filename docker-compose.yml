@@ -1,11 +1,13 @@
 services:
   master:
+    container_name: master
     build: master
     ports:
       - "8080:8080"
     networks: 
       - my-net
   secondary1:
+    container_name: secondary1
     build: secondary2
     command: [ "1" ]
     ports:
@@ -15,6 +17,7 @@ services:
     depends_on:
       - master
   secondary2:
+    container_name: secondary2  
     build: secondary2
     command: [ "2" ]
     ports:

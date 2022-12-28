@@ -11,7 +11,7 @@
         },        
         {
             "id": 1,
-            "name": "Secondary #1",            
+            "name": "Secondary #1",
             "type": "secondary",
             "hostname": "localhost",
             "port": 8081,
