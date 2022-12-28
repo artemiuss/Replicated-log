@@ -74,13 +74,13 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             try:
                 response = requests.post(url, json=msg_dict)
                 repl_status_dict[secondary_host["id"]] = response.status_code
-                #if response.status_code == 200:
-                #    logging.info(f'[{process.pid}]: ...')
-                #else:
-                #    logging.info(f'[{process.pid}]: ...')    
+                if response.status_code == 200:
+                    logging.info(f"[{process.pid}]: The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated on " + secondary_host.get("name"))
+                else:
+                    logging.info(f"[{process.pid}]: Failed to replicate message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" on " + secondary_host.get("name"))
             except Exception as e:
                 logging.error(f"[{process.pid}]: Exception: {e}", stack_info=debug)
-                raise
+                repl_status_dict[secondary_host["id"]] = None
 
         logging.info(f'{self.address_string()} sent a request to append message')
         try:
@@ -132,20 +132,34 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 proc.join()
                 logging.info(f"END process [{proc.pid}] {proc.name}")
 
-            # append new message to log
-            log_list.append(msg_dict)
-            # release the lock
-            self.lock.release()                    
-            logging.info(f"Received message \"" + msg_dict["msg"] + "\" has been added to log with id: " + str(msg_dict["id"]))
+            #check replication results
+            is_repl_failed = False
+            for secondary_host in secondary_hosts:
+                if repl_status_dict[secondary_host.get("id")] != 200:
+                    is_repl_failed = True
+                    break
+            if is_repl_failed == False:
+                # append new message to log
+                log_list.append(msg_dict)
+                logging.info(f"Received message \"" + msg_dict["msg"] + "\" has been added to log with id: " + str(msg_dict["id"]))
 
-            response = f"The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated"
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/plain; charset=utf-8')
-            self.send_header('Server', 'Master')
-            self.end_headers()
-            response = response + '\n'
-            self.wfile.write(response.encode('utf-8'))
-            logging.info(response)   
+                response = f"The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated"
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                self.send_header('Server', 'Master')
+                self.end_headers()
+                response = response + '\n'
+                self.wfile.write(response.encode('utf-8'))
+                logging.info(response)                              
+            else:
+                response = f'Failed to replicate message: msg_id = {msg_id}, msg = \"{msg}\"'
+                self.send_response(599)
+                self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                self.send_header('Server', 'Master')
+                self.end_headers()
+                response = response + '\n'                
+                self.wfile.write(response.encode('utf-8'))
+                logging.info(response)
         except Exception as e:
             response = f"Exception: {e}"
             self.send_response(500)
@@ -155,6 +169,9 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))  
             logging.error(response, stack_info=debug)
+        finally:
+            # release the lock
+            self.lock.release()    
 
     def log_message(self, format, *args):
         pass
