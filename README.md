@@ -30,7 +30,7 @@ curl -X POST localhost:8080 -H 'Content-Type: application/json' -d '{"key1":"val
 curl -X POST localhost:8080 -H 'Content-Type: application/json' -d '{"key1":"value1", "key2":"value2", "key3":"value3"}'
 ```
 
-## Replicated log
+## Replicated Log
 The Replicated Log implementation with the following architecture: one Master and any number of Secondaries.
 
 Master exposes simple HTTP server on *8080* port.
