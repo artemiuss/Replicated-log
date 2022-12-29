@@ -27,7 +27,7 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        logging.info(f'{self.address_string()} requested list of messages')
+        logging.info(f'[GET] {self.address_string()} requested list of messages')
         try:
             if log_list:
                 log_list_fmt = [ 
@@ -49,7 +49,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))
-            logging.info(response)
+            logging.info('[GET] ' + response)
         except Exception as e:
             response = f"Exception: {e}"
             self.send_response(500)
@@ -58,11 +58,12 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))
-            logging.error(f"Exception: {e}", stack_info=debug)
+            logging.error('[GET] ' + response, stack_info=debug)
 
     def do_POST(self):
-        time.sleep(10)
-        logging.info(f'{self.address_string()} sent a request to replicate message')
+        #time.sleep(10)
+        logging.info(f'[POST] {self.address_string()} sent a request to replicate message')
+
         try:
             content_length = int(self.headers['Content-Length'])
             body = self.rfile.read(content_length).decode("utf-8")
@@ -71,7 +72,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             # append new message to log
             msg_dict["replicated_ts"] = time.time()
             log_list.append(msg_dict)            
-            logging.info(f"Received message \"" + msg_dict["msg"] + "\" has been added to log with id: " + str(msg_dict["id"]))
+            logging.info(f"[POST] Received message \"" + msg_dict["msg"] + "\" has been added to log with id: " + str(msg_dict["id"]))
             
             response = f"The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated"            
             self.send_response(200)
@@ -80,7 +81,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))
-            logging.info(response)   
+            logging.info('[POST] ' + response)   
         except Exception as e:
             response = f"Exception: {e}"
             self.send_response(500)
@@ -89,7 +90,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))  
-            logging.error(response, stack_info=debug)
+            logging.error('[POST] ' + response, stack_info=debug)
 
     def log_message(self, format, *args):
         pass
