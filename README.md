@@ -40,6 +40,7 @@ Secondary exposes simple HTTP server *8081* and *8082* ports with.
 ### Usage notes:
 1. Setting up
 ```
+docker-compose build
 docker-compose up
 ```
 
