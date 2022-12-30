@@ -1,63 +1,139 @@
-import logging
-import json
-import os
-import time
+#!/usr/bin/env python3
+import sys, os, json, time, logging
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from io import BytesIO
+from socketserver import ThreadingMixIn
+from jsonschema import validate
+from tabulate import tabulate
 
-from airflow.utils import yaml
+def get_config(key):
+    """
+    Read config
+    """
+    with open(os.path.join(script_path,'config.json')) as json_file:
+        try:
+            dict_conf = json.load(json_file)
+            return dict_conf[key]
+        except:
+            raise
 
-with open("config.yaml", "r") as f:
-    config = yaml.safe_load(f)
-
+"""
+HTTP-server
+"""
+# Processing Simultaneous/Asynchronous Requests with Python BaseHTTPServer
+# https://stackoverflow.com/a/12651298
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    pass
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
-    command_list = []
-
     def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-Type', 'text/plain; charset=utf-8')
-        self.end_headers()
-        self.wfile.write(json.dumps(self.command_list).encode())
+        logging.info(f'[GET] {self.address_string()} requested list of messages')
+        try:
+            if log_list:
+                log_list_fmt = [ 
+                                    {
+                                        "id": msg.get("id"),
+                                        "msg": msg.get("msg"),
+                                        "w": msg.get("w"),
+                                        "replicated_ts" : datetime.utcfromtimestamp(msg.get("replicated_ts")).strftime("%Y-%m-%d %H:%M:%S.%f")
+                                    } 
+                                for msg in log_list
+                                ]
+                log_list_str = tabulate(log_list_fmt, headers="keys", tablefmt="simple_grid")
+                response = 'The replication log:\n' + log_list_str
+            else:
+                response = 'The replication log is empty'
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Server', 'Secondary')
+            self.end_headers()
+            response = response + '\n'
+            self.wfile.write(response.encode('utf-8'))
+            logging.info('[GET] ' + response)
+        except Exception as e:
+            response = f"Exception: {e}"
+            self.send_response(500)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Server', 'Secondary')
+            self.end_headers()
+            response = response + '\n'
+            self.wfile.write(response.encode('utf-8'))
+            logging.error('[GET] ' + response, stack_info=debug)
 
     def do_POST(self):
-        content_length = int(self.headers['Content-Length'])
-        post_body = self.rfile.read(content_length)
+        #time.sleep(10)
+        logging.info(f'[POST] {self.address_string()} sent a request to replicate message')
 
-        self.command_list.append(str(post_body))
-        self.send_response(200)
-        self.send_header('Content-Type', 'text/plain; charset=utf-8')
-        self.end_headers()
+        try:
+            content_length = int(self.headers['Content-Length'])
+            body = self.rfile.read(content_length).decode("utf-8")
+            msg_dict = json.loads(body)
 
-        response = BytesIO()
-        response.write(b'This is POST request. ')
-        response.write(b'Received: ')
-        response.write(post_body)
-        self.wfile.write(response.getvalue())
+            # append new message to log
+            msg_dict["replicated_ts"] = time.time()
+            log_list.append(msg_dict)            
+            logging.info(f"[POST] Received message \"" + msg_dict["msg"] + "\" has been added to log with id: " + str(msg_dict["id"]))
+            
+            response = f"The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated"            
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Server', 'Secondary')
+            self.end_headers()
+            response = response + '\n'
+            self.wfile.write(response.encode('utf-8'))
+            logging.info('[POST] ' + response)   
+        except Exception as e:
+            response = f"Exception: {e}"
+            self.send_response(500)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Server', 'Secondary')
+            self.end_headers()
+            response = response + '\n'
+            self.wfile.write(response.encode('utf-8'))  
+            logging.error('[POST] ' + response, stack_info=debug)
 
+    def log_message(self, format, *args):
+        pass
 
-def keep_running():
-    return True
+def run_HTTP_server(server_class=ThreadedHTTPServer, handler_class=SimpleHTTPRequestHandler):
+    secondary_port = [e.get("port") for e in hosts if e.get("type") == "secondary" and e.get("id") == int(secondary_id)][0]
+    httpd = ThreadedHTTPServer(('', secondary_port), SimpleHTTPRequestHandler)
+    logging.info(f'HTTP server started and listening on {secondary_port}')
+    httpd.serve_forever()
 
+# Init for shared variables
+script_path = os.path.dirname(os.path.realpath(__file__))
+hosts = get_config("Hosts")
+master_host = [e.get("port") for e in hosts if e.get("type") == "master"][0]
+log_list = []
 
-def run_HTTP_server(server_class=HTTPServer, handler_class=SimpleHTTPRequestHandler):
-
-    log_dir = config['log_dir']
-    logfile_name = datetime.now().strftime('secondary_%Y-%m-%d_%H-%M-%S.log')
-    logfile_path = os.path.join(log_dir, logfile_name)
-    print(logfile_path)
-    logging.basicConfig(filename=logfile_path, format='%(asctime)s %(message)s', level=logging.INFO)
-
+def main():
+    """
+    The Main
+    """
     logging.info('Secondary host has been started')
-
-    httpd = HTTPServer(('', config['port']), SimpleHTTPRequestHandler)
-    while keep_running():
-        time.sleep(config['delay'])
-        httpd.handle_request()
-
+    try:
+        run_HTTP_server();
+    except Exception as e:
+        logging.error(f"Exception: {e}", stack_info=debug)
+        raise
 
 if __name__ == '__main__':
+    sys_ags = sys.argv
+    if len(sys.argv) == 1:
+        sys.exit("Please provide the Sedondary id (1 or 2) as first argument")
+    secondary_id = sys_ags[1]
 
-    run_HTTP_server()
-
+    debug = get_config("debug")
+    logfile_name = datetime.now().strftime(f"secondary{secondary_id}.log")
+    logfile_path = os.path.join(script_path, logfile_name)
+    logging.basicConfig(
+        format='%(asctime)s %(levelname)s %(message)s',
+        level=logging.DEBUG if debug else logging.INFO,
+        handlers=[
+            logging.FileHandler(logfile_path),
+            logging.StreamHandler()
+        ]
+    )
+    main()
+   

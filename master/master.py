@@ -74,18 +74,18 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             url = f'http://{secondary_host.get("hostname")}:{secondary_host.get("port")}'    
             host_id = secondary_host.get("id")        
             process = multiprocessing.current_process()
-            logging.info(f"[POST] START process [{process.pid}] {process.name}")
-            try:
-                response = requests.post(url, json=msg_dict)
-                self.repl_status_dict[(msg_dict["id"],secondary_host["id"])] = response.status_code
-                if response.status_code == 200:
-                    logging.info(f"[POST]       process [{process.pid}] The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated on " + secondary_host.get("name"))
-                else:
-                    logging.info(f"[POST]       process [{process.pid}] Failed to replicate message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" on " + secondary_host.get("name"))
-            except Exception as e:
-                logging.error(f"[POST] [{process.pid}]: Exception: {e}", stack_info=debug)
-            finally:
-                logging.info(f"[POST] END   process [{process.pid}] {process.name}")
+            logging.info(f"[POST] [process {process.pid}] {process.name}")
+            while True:
+                try:
+                    response = requests.post(url, json=msg_dict, timeout=(3.5,0.5)) # (connect timeout, read timeout) https://requests.readthedocs.io/en/latest/user/advanced/#timeouts
+                    self.repl_status_dict[(msg_dict["id"],secondary_host["id"])] = response.status_code
+                    
+                    if response.status_code == 200:
+                        logging.info(f"[POST] [process {process.pid}] The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated on " + secondary_host.get("name"))
+                        break
+                except Exception as e:
+                    logging.error(f"[POST] [process {process.pid}] Exception: {e}")
+            logging.info(f"[POST] [process {process.pid}] {process.name}")
 
         logging.info(f'[POST] {self.address_string()} sent a request to append message')
         try:
@@ -93,7 +93,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             body = self.rfile.read(content_length).decode("utf-8")
             body_dict = json.loads(body)
             msg = body_dict.get("msg")
-            w = body_dict.get("w")
+            w = body_dict.get("w") or 3
 
             #Validate input
             try:
@@ -127,70 +127,41 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             # release the lock
             self.lock.release()
             
-            #prepare replication
-            is_repl_failed = False            
-            #manager = multiprocessing.Manager()
-            #repl_status_dict = manager.dict()
-            procs = []
+            logging.info(f'[POST] Replicating the message')
             for secondary_host in secondary_hosts:
                 self.repl_status_dict[(msg_dict["id"],secondary_host["id"])] = None
                 p = multiprocessing.Process(target=replicate_msg, 
                                             name="Replicating msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" on " + secondary_host.get("name"),
                                             args=(secondary_host, msg_dict))
-                procs.append(p)
+                p.start()                            
 
-            if w is None:
-                # Blocking mode (write concern has not been specified)
-                logging.info(f'[POST] Replicating the message in the BLOCKING MODE on every Secondary server')
-                # trying to replicate message on every Secondary server
-                for proc in procs:
-                    proc.start()
-                for proc in procs:
-                    proc.join()
-                #check replication results
+            #check replication results
+            while True:
+                ack_count = 0 
                 for secondary_host in secondary_hosts:
-                    if self.repl_status_dict[(msg_dict["id"],secondary_host["id"])] != 200:
-                        is_repl_failed = True
-                        break
-            else:
-                # Async mode
-                logging.info(f'[POST] Replicating the message in the ASYNC MODE with Write Concern parameter specified')
-                # trying to replicate message on every Secondary server
-                for proc in procs:
-                    proc.start()
-                #check replication results
-                while True:
-                    ack_count = 0 
-                    for secondary_host in secondary_hosts:
-                        if self.repl_status_dict[(msg_dict["id"],secondary_host["id"])] == 200:
-                            ack_count = ack_count + 1 
-                    if ack_count >= w-1:
-                        break
-                    time.sleep(1)                    
+                    if self.repl_status_dict[(msg_dict["id"],secondary_host["id"])] == 200:
+                        ack_count = ack_count + 1 
+                    else:    
+                        # добавить обработку когда код <> 200
+                        # do retry
+                        pass
+                if ack_count >= w-1:
+                    break
+                time.sleep(1)
 
-            if is_repl_failed == False:
-                #set ts
-                log_list[msg_id-1]["replicated_ts"] = time.time()
+            #set ts
+            log_list[msg_id-1]["replicated_ts"] = time.time()
 
-                response = f"The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated"
-                self.send_response(200)
-                self.send_header('Content-Type', 'text/plain; charset=utf-8')
-                self.send_header('Server', 'Master')
-                self.end_headers()
-                response = response + '\n'
-                self.wfile.write(response.encode('utf-8'))
-                logging.info('[POST] ' + response)
-            else:
-                response = f'Failed to replicate message: msg_id = {msg_id}, msg = \"{msg}\"'
-                self.send_response(599)
-                self.send_header('Content-Type', 'text/plain; charset=utf-8')
-                self.send_header('Server', 'Master')
-                self.end_headers()
-                response = response + '\n'
-                self.wfile.write(response.encode('utf-8'))
-                logging.info('[POST] ' + response)                                       
+            response = f"The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated"
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Server', 'Master')
+            self.end_headers()
+            response = response + '\n'
+            self.wfile.write(response.encode('utf-8'))
+            logging.info('[POST] ' + response)
         except Exception as e:
-            response = f"Exception: {e}"
+            response = f"Failed to replicate message: msg_id = {msg_id}, msg = \"{msg}\". Exception: {e}"
             self.send_response(500)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Server', 'Master')
@@ -233,7 +204,7 @@ if __name__ == '__main__':
     logfile_path = os.path.join(script_path, logfile_name)
     logging.basicConfig(
         format='%(asctime)s %(levelname)s %(message)s',
-        level=logging.INFO,
+        level=logging.DEBUG if debug else logging.INFO,
         handlers=[
             logging.FileHandler(logfile_path),
             logging.StreamHandler()
