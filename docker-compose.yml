@@ -3,6 +3,10 @@ services:
     container_name: master
     build: .
     image: replicated_log
+    volumes:
+      - type: bind
+        source: ./master.py
+        target: /app/master.py
     command: [ "./master.py" ]    
     ports:
       - "8080:8080"
@@ -10,8 +14,12 @@ services:
       - my-net
   secondary1:
     container_name: secondary1
-    build: .
+    build: .    
     image: replicated_log    
+    volumes:
+      - type: bind
+        source: ./secondary.py
+        target: /app/secondary.py
     command: [ "./secondary.py", "1" ]
     ports:
       - "8081:8081"
@@ -21,8 +29,12 @@ services:
       - master
   secondary2:
     container_name: secondary2  
-    build: .
-    image: replicated_log    
+    build: .    
+    image: replicated_log
+    volumes:
+      - type: bind
+        source: ./secondary.py
+        target: /app/secondary.py    
     command: [ "./secondary.py", "2" ]
     ports:
       - "8082:8082"
