@@ -2,6 +2,7 @@ services:
   master:
     container_name: master
     build: .
+    image: replicated_log
     command: [ "./master.py" ]    
     ports:
       - "8080:8080"
@@ -10,6 +11,7 @@ services:
   secondary1:
     container_name: secondary1
     build: .
+    image: replicated_log    
     command: [ "./secondary.py", "1" ]
     ports:
       - "8081:8081"
