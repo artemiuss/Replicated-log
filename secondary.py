@@ -61,7 +61,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             logging.error('[GET] ' + response, stack_info=debug)
 
     def do_POST(self):
-        #time.sleep(10)
         logging.info(f'[POST] {self.address_string()} sent a request to replicate message')
 
         try:

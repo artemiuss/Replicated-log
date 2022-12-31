@@ -74,7 +74,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             url = f'http://{secondary_host.get("hostname")}:{secondary_host.get("port")}'    
             host_id = secondary_host.get("id")        
             process = multiprocessing.current_process()
-            logging.info(f"[POST] [process {process.pid}] {process.name}")
+            logging.info(f"[POST] [process {process.pid}] START {process.name}")
             while True:
                 try:
                     response = requests.post(url, json=msg_dict, timeout=(3.5,0.5)) # (connect timeout, read timeout) https://requests.readthedocs.io/en/latest/user/advanced/#timeouts
@@ -83,9 +83,11 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     if response.status_code == 200:
                         logging.info(f"[POST] [process {process.pid}] The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated on " + secondary_host.get("name"))
                         break
-                except Exception as e:
-                    logging.error(f"[POST] [process {process.pid}] Exception: {e}")
-            logging.info(f"[POST] [process {process.pid}] {process.name}")
+                except requests.RequestException:
+                    logging.info(f"[POST] [process {process.pid}] " + secondary_host.get("name") +" not available. Retrying...")
+                #except Exception as e:
+                    #logging.error(f"[POST] [process {process.pid}] Exception: {e}")
+            logging.info(f"[POST] [process {process.pid}] END {process.name}")
 
         logging.info(f'[POST] {self.address_string()} sent a request to append message')
         try:
