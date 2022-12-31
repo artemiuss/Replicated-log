@@ -83,7 +83,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     if response.status_code == 200:
                         logging.info(f"[POST] [process {process.pid}] The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated on " + secondary_host.get("name"))
                         break
-                except requests.RequestException:
+                except (requests.ConnectionError, requests.Timeout) as e:
                     logging.info(f"[POST] [process {process.pid}] " + secondary_host.get("name") +" not available. Retrying...")
                 except Exception as e:
                     logging.error(f"[POST] [process {process.pid}] Exception: {e}")
