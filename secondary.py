@@ -43,14 +43,15 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 response = 'The replication log:\n' + log_list_str
             else:
                 response = 'The replication log is empty'
+            logging.info('[GET] ' + response)
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Server', 'Secondary')
             self.end_headers()
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))
-            logging.info('[GET] ' + response)
         except Exception as e:
+            logging.error('[GET] ' + response, stack_info=debug)
             response = f"Exception: {e}"
             self.send_response(500)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
@@ -58,7 +59,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))
-            logging.error('[GET] ' + response, stack_info=debug)
 
     def do_POST(self):
         logging.info(f'[POST] {self.address_string()} sent a request to replicate message')
@@ -69,19 +69,23 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             msg_dict = json.loads(body)
 
             # append new message to log
-            msg_dict["replicated_ts"] = time.time()
-            log_list.append(msg_dict)            
-            logging.info(f"[POST] Received message \"" + msg_dict["msg"] + "\" has been added to log with id: " + str(msg_dict["id"]))
+            if not any(msg["id"] == msg_dict["id"] for msg in log_list):
+                msg_dict["replicated_ts"] = time.time()
+                log_list.append(msg_dict)            
+                logging.info(f"[POST] Message with id = " + str(msg_dict["id"]) + " has been replicated")
+            else:    
+                logging.info(f"[POST] Message with id = " + str(msg_dict["id"]) + " already exists in the log")
             
             response = f"The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated"            
+            logging.info('[POST] ' + response)   
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Server', 'Secondary')
             self.end_headers()
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))
-            logging.info('[POST] ' + response)   
         except Exception as e:
+            logging.error('[POST] ' + response, stack_info=debug)
             response = f"Exception: {e}"
             self.send_response(500)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
@@ -89,7 +93,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))  
-            logging.error('[POST] ' + response, stack_info=debug)
 
     def log_message(self, format, *args):
         pass

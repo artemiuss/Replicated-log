@@ -52,14 +52,15 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 response = 'The replication log:\n' + log_list_str
             else:
                 response = 'The replication log is empty'
+            logging.info('[GET] ' + response)
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Server', 'Master')
             self.end_headers()
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))
-            logging.info('[GET] ' + response)
         except Exception as e:
+            logging.error('[GET] ' + response, stack_info=debug)
             response = f"Exception: {e}"
             self.send_response(500)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
@@ -67,7 +68,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))
-            logging.error('[GET] ' + response, stack_info=debug)
 
     def do_POST(self):
         def replicate_msg(secondary_host, msg_dict):
@@ -85,8 +85,10 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         break
                 except requests.RequestException:
                     logging.info(f"[POST] [process {process.pid}] " + secondary_host.get("name") +" not available. Retrying...")
-                #except Exception as e:
-                    #logging.error(f"[POST] [process {process.pid}] Exception: {e}")
+                except Exception as e:
+                    logging.error(f"[POST] [process {process.pid}] Exception: {e}")
+                finally:
+                    time.sleep(1)    
             logging.info(f"[POST] [process {process.pid}] END {process.name}")
 
         logging.info(f'[POST] {self.address_string()} sent a request to append message')
@@ -155,14 +157,15 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             log_list[msg_id-1]["replicated_ts"] = time.time()
 
             response = f"The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated"
+            logging.info('[POST] ' + response)
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Server', 'Master')
             self.end_headers()
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))
-            logging.info('[POST] ' + response)
         except Exception as e:
+            logging.error('[POST] ' + response, stack_info=debug)
             response = f"Failed to replicate message: msg_id = {msg_id}, msg = \"{msg}\". Exception: {e}"
             self.send_response(500)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
@@ -170,7 +173,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))  
-            logging.error('[POST] ' + response, stack_info=debug)
 
     def log_message(self, format, *args):
         pass
@@ -195,7 +197,7 @@ def main():
     """
     logging.info('Master host has been started')
     try:
-        run_HTTP_server();
+        run_HTTP_server()
     except Exception as e:
         logging.error(f"Exception: {e}", stack_info=debug)
         raise
