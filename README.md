@@ -1,8 +1,8 @@
 # Replicated Log Task
 
 Team 6:
-- Dmytro Kushnir
 - Artem Avetian
+- Dmytro Kushnir
 - Nikita Korsun
 
 ## Simple Echo-Server application
