@@ -76,6 +76,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             host_id = secondary_host.get("id")        
             process = multiprocessing.current_process()
             logging.info(f"[POST] [process {process.pid}] START {process.name}")
+            sleep_delay = 1
             while True:
                 try:
                     response = requests.post(url, json=msg_dict, timeout=(3.5,None)) # (connect timeout, read timeout) https://requests.readthedocs.io/en/latest/user/advanced/#timeouts
@@ -85,11 +86,16 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         logging.info(f"[POST] [process {process.pid}] The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated on " + secondary_host.get("name"))
                         break
                 except (requests.ConnectionError, requests.Timeout) as e:
-                    logging.info(f"[POST] [process {process.pid}] " + secondary_host.get("name") +" not available. Retrying...")
+                    logging.info(f"[POST] [process {process.pid}] " + secondary_host.get("name") + f" not available. Retrying in {sleep_delay}s ...")
                 except Exception as e:
                     logging.error(f"[POST] [process {process.pid}] Exception: {e}")
                 finally:
-                    time.sleep(1)    
+                    time.sleep(sleep_delay)
+                    # "smart" delays logic
+                    if sleep_delay < 60:
+                        sleep_delay = sleep_delay + 1
+                    else:
+                        sleep_delay = 1
             logging.info(f"[POST] [process {process.pid}] END {process.name}")
 
         logging.info(f'[POST] {self.address_string()} sent a request to append message')
