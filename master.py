@@ -29,7 +29,6 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     # create a lock
-    # https://stackoverflow.com/questions/18279941/maintaining-log-file-from-multiple-threads-in-python
     lock = Lock()
 
     manager = multiprocessing.Manager()
@@ -79,7 +78,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             sleep_delay = 1
             while True:
                 try:
-                    response = requests.post(url, json=msg_dict, timeout=(3.5,None)) # (connect timeout, read timeout) https://requests.readthedocs.io/en/latest/user/advanced/#timeouts
+                    # https://requests.readthedocs.io/en/latest/user/advanced/#timeouts
+                    response = requests.post(url, json=msg_dict, timeout=(3.5,None)) # (connect timeout, read timeout)
                     self.repl_status_dict[(msg_dict["id"],secondary_host["id"])] = response.status_code
                     
                     if response.status_code == 200:
@@ -185,7 +185,6 @@ def run_HTTP_server(server_class=ThreadedHTTPServer, handler_class=SimpleHTTPReq
     httpd = ThreadedHTTPServer(('', master_port), SimpleHTTPRequestHandler)
     logging.info(f'HTTP server started and listening on {master_port}')
     httpd.serve_forever()
-
 
 # Init for shared variables
 script_path = os.path.dirname(os.path.realpath(__file__))
