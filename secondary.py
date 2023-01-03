@@ -84,6 +84,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))
+        except BrokenPipeError:
+            pass            
         except Exception as e:
             logging.error('[POST] ' + response, stack_info=debug)
             response = f"Exception: {e}"
