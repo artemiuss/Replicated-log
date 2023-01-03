@@ -29,10 +29,15 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         logging.info(f'[GET] {self.address_string()} requested list of messages')
         try:
+            gap_index = None
             if log_list:
                 log_list_sort = sorted(log_list, key=lambda msg: msg['id'])
-                #check gaps
-                # ...          
+                # find first gap
+                for index, msg in enumerate(log_list_sort):
+                    if msg.get("id") > log_list_sort[index - 1].get("id") + 1:
+                        gap_index = index
+                        break
+
                 log_list_fmt = [ 
                                     {
                                         "id": msg.get("id"),
@@ -40,7 +45,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                         "w": msg.get("w"),
                                         "replicated_ts" : datetime.utcfromtimestamp(msg.get("replicated_ts")).strftime("%Y-%m-%d %H:%M:%S.%f")
                                     } 
-                                for msg in log_list_sort
+                                for index, msg in enumerate(log_list_sort) if gap_index is None or index < gap_index
                                 ]
                 log_list_str = tabulate(log_list_fmt, headers="keys", tablefmt="simple_grid")
                 response = 'The replication log:\n' + log_list_str
