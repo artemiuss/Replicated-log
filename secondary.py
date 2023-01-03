@@ -30,6 +30,9 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         logging.info(f'[GET] {self.address_string()} requested list of messages')
         try:
             if log_list:
+                log_list_sort = sorted(log_list, key=lambda msg: msg['id'])
+                #check gaps
+                # ...          
                 log_list_fmt = [ 
                                     {
                                         "id": msg.get("id"),
@@ -37,7 +40,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                         "w": msg.get("w"),
                                         "replicated_ts" : datetime.utcfromtimestamp(msg.get("replicated_ts")).strftime("%Y-%m-%d %H:%M:%S.%f")
                                     } 
-                                for msg in log_list
+                                for msg in log_list_sort
                                 ]
                 log_list_str = tabulate(log_list_fmt, headers="keys", tablefmt="simple_grid")
                 response = 'The replication log:\n' + log_list_str
@@ -84,7 +87,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))
-        except BrokenPipeError:
+        except BrokenPipeError: # https://stackoverflow.com/questions/26692284/how-to-prevent-brokenpipeerror-when-doing-a-flush-in-python
             pass            
         except Exception as e:
             logging.error('[POST] ' + response, stack_info=debug)

@@ -39,6 +39,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         logging.info(f'[GET] {self.address_string()} requested list of messages')
         try:
             if log_list:
+                log_list_sort = sorted(log_list, key=lambda msg: msg['id'])
                 log_list_fmt = [ 
                                     {
                                         "id": msg.get("id"),
@@ -46,7 +47,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                         "w": msg.get("w"),
                                         "replicated_ts": datetime.utcfromtimestamp(msg.get("replicated_ts")).strftime("%Y-%m-%d %H:%M:%S.%f") if msg.get("replicated_ts") != None else "NOT REPLICATED"
                                     } 
-                                for msg in log_list
+                                for msg in log_list_sort
                                 ]
                 log_list_str = tabulate(log_list_fmt, headers="keys", tablefmt="simple_grid")
                 response = 'The replication log:\n' + log_list_str
@@ -122,7 +123,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
             # acquire the lock
             self.lock.acquire()
-            log_list_last_id = log_list[-1].get("id") if log_list else 0
+            log_list_last_id = max(log_list, key=lambda msg:msg['id']).get('id') if log_list else 0
             msg_id = log_list_last_id + 1
             msg_dict = {"id": msg_id, "msg": msg, "replicated_ts" : None, "w": w}
             # append new message to log
@@ -145,8 +146,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 for secondary_host in secondary_hosts:
                     if self.repl_status_dict[(msg_dict["id"],secondary_host["id"])] == 200:
                         ack_count = ack_count + 1 
-                    else:    
-                        pass
                 if ack_count >= w-1:
                     break
                 time.sleep(1)
