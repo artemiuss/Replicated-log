@@ -29,15 +29,15 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         logging.info(f'[GET] {self.address_string()} requested list of messages')
         try:
+            log_list_sort = sorted(log_list, key=lambda msg: msg['id'])
             gap_index = None
-            if log_list:
-                log_list_sort = sorted(log_list, key=lambda msg: msg['id'])
-                # find first gap
-                for index, msg in enumerate(log_list_sort):
-                    if msg.get("id") > log_list_sort[index - 1].get("id") + 1:
-                        gap_index = index
-                        break
-
+            # find first gap
+            for index, msg in enumerate(log_list_sort):
+                if msg.get("id") > (log_list_sort[index - 1].get("id") + 1 if index > 0 else 1):
+                    gap_index = index
+                    break
+            logging.info(f"gap_index= {gap_index}")
+            if log_list and (gap_index is None or gap_index > 0):
                 log_list_fmt = [ 
                                     {
                                         "id": msg.get("id"),
@@ -75,6 +75,10 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             content_length = int(self.headers['Content-Length'])
             body = self.rfile.read(content_length).decode("utf-8")
             msg_dict = json.loads(body)
+
+            # delay to test message ordrer, deduplication
+            if msg_dict["msg"] == "wait":
+                time.sleep(10)
 
             # append new message to log
             if not any(msg["id"] == msg_dict["id"] for msg in log_list):

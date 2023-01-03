@@ -78,7 +78,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             logging.info(f"[POST] [process {process.pid}] START {process.name}")
             while True:
                 try:
-                    response = requests.post(url, json=msg_dict, timeout=(3.5,0.5)) # (connect timeout, read timeout) https://requests.readthedocs.io/en/latest/user/advanced/#timeouts
+                    response = requests.post(url, json=msg_dict, timeout=(3.5,None)) # (connect timeout, read timeout) https://requests.readthedocs.io/en/latest/user/advanced/#timeouts
                     self.repl_status_dict[(msg_dict["id"],secondary_host["id"])] = response.status_code
                     
                     if response.status_code == 200:
