@@ -146,8 +146,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     if self.repl_status_dict[(msg_dict["id"],secondary_host["id"])] == 200:
                         ack_count = ack_count + 1 
                     else:    
-                        # добавить обработку когда код <> 200
-                        # do retry
                         pass
                 if ack_count >= w-1:
                     break
