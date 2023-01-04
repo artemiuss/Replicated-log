@@ -6,7 +6,6 @@ from socketserver import ThreadingMixIn
 from jsonschema import validate
 from tabulate import tabulate
 import threading
-import multiprocessing
 
 def get_config(key):
     """
@@ -108,8 +107,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         def replicate_msg(secondary_host, msg_dict):
             url = f'http://{secondary_host.get("hostname")}:{secondary_host.get("port")}'    
             host_id = secondary_host.get("id")        
-            process = multiprocessing.current_process()
-            logging.info(f"[POST] [process {process.pid}] START {process.name}")
+            thread_name =  threading.current_thread().name
+            logging.info(f"[POST] START {thread_name}")
             sleep_delay = 1
             while True:
                 try:
@@ -118,12 +117,12 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
                     if response.status_code == 200:
                         latch.count_down()
-                        logging.info(f"[POST] [process {process.pid}] The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated on " + secondary_host.get("name"))
+                        logging.info(f"[POST]     {thread_name}. The message has been succesfully replicated")
                         break
                 except (requests.ConnectionError, requests.Timeout) as e:
-                    logging.info(f"[POST] [process {process.pid}] " + secondary_host.get("name") + f" not available. Retrying in {sleep_delay}s ...")
+                    logging.info(f'[POST]     {thread_name}. {secondary_host.get("name")} not available. Retrying in {sleep_delay}s ...')
                 except Exception as e:
-                    logging.error(f"[POST] [process {process.pid}] Exception: {e}")
+                    logging.error(f"[POST] {thread_name}. Exception: {e}")
                 finally:
                     time.sleep(sleep_delay)
                     # "smart" delays logic
@@ -131,7 +130,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         sleep_delay += 1
                     else:
                         sleep_delay = 1
-            logging.info(f"[POST] [process {process.pid}] END {process.name}")
+            logging.info(f"[POST] END {thread_name}")
 
         logging.info(f'[POST] {self.address_string()} sent a request to append message')
         try:
@@ -180,8 +179,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
             for secondary_host in secondary_hosts:
                 p = threading.Thread(target=replicate_msg, 
-                                            name="Replicating msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" on " + secondary_host.get("name"),
-                                            args=(secondary_host, msg_dict))
+                                    name="Replicating msg_id = " + str(msg_dict["id"]) + " on " + secondary_host.get("name"),
+                                    args=(secondary_host, msg_dict))
                 p.start()                            
 
             # wait for the latch to close
