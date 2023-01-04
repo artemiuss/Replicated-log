@@ -5,7 +5,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from jsonschema import validate
 from tabulate import tabulate
-from threading import Lock
+import threading
 import multiprocessing
 
 def get_config(key):
@@ -19,6 +19,44 @@ def get_config(key):
         except:
             raise
 
+
+# CountDownLatch implementation
+# https://superfastpython.com/thread-countdown-latch/
+# simple countdown latch, starts closed then opens once count is reached
+class CountDownLatch():
+
+    # constructor
+    def __init__(self, count):
+        # store the count
+        self.count = count
+        # control access to the count and notify when latch is open
+        self.condition = threading.Condition()
+
+    # count down the latch by one increment
+    def count_down(self):
+        # acquire the lock on the condition
+        with self.condition:
+            # check if the latch is already open
+            if self.count == 0:
+                return
+            # decrement the counter
+            self.count -= 1
+            # check if the latch is now open
+            if self.count == 0:
+                # notify all waiting threads that the latch is open
+                self.condition.notify_all()
+
+    # wait for the latch to open
+    def wait(self):
+        # acquire the lock on the condition
+        with self.condition:
+            # check if the latch is already open
+            if self.count == 0:
+                return
+            # wait to be notified when the latch is open
+            self.condition.wait()
+
+
 """
 HTTP-server
 """
@@ -29,10 +67,7 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     # create a lock
-    lock = Lock()
-
-    manager = multiprocessing.Manager()
-    repl_status_dict = manager.dict()
+    lock = threading.Lock()
 
     def do_GET(self):
         logging.info(f'[GET] {self.address_string()} requested list of messages')
@@ -80,9 +115,9 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 try:
                     # https://requests.readthedocs.io/en/latest/user/advanced/#timeouts
                     response = requests.post(url, json=msg_dict, timeout=(3.5,None)) # (connect timeout, read timeout)
-                    self.repl_status_dict[(msg_dict["id"],secondary_host["id"])] = response.status_code
-                    
+
                     if response.status_code == 200:
+                        latch.count_down()
                         logging.info(f"[POST] [process {process.pid}] The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated on " + secondary_host.get("name"))
                         break
                 except (requests.ConnectionError, requests.Timeout) as e:
@@ -93,7 +128,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     time.sleep(sleep_delay)
                     # "smart" delays logic
                     if sleep_delay < 60:
-                        sleep_delay = sleep_delay + 1
+                        sleep_delay += 1
                     else:
                         sleep_delay = 1
             logging.info(f"[POST] [process {process.pid}] END {process.name}")
@@ -137,24 +172,20 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             logging.info(f"[POST] Received message \"" + msg_dict["msg"] + "\" has been added to log with id: " + str(msg_dict["id"]))
             # release the lock
             self.lock.release()
-            
+
             logging.info(f'[POST] Replicating the message')
+
+            # create the countdown latch
+            latch = CountDownLatch(w-1)
+
             for secondary_host in secondary_hosts:
-                self.repl_status_dict[(msg_dict["id"],secondary_host["id"])] = None
-                p = multiprocessing.Process(target=replicate_msg, 
+                p = threading.Thread(target=replicate_msg, 
                                             name="Replicating msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" on " + secondary_host.get("name"),
                                             args=(secondary_host, msg_dict))
                 p.start()                            
 
-            #check replication results
-            while True:
-                ack_count = 0 
-                for secondary_host in secondary_hosts:
-                    if self.repl_status_dict[(msg_dict["id"],secondary_host["id"])] == 200:
-                        ack_count = ack_count + 1 
-                if ack_count >= w-1:
-                    break
-                time.sleep(1)
+            # wait for the latch to close
+            latch.wait()
 
             #set ts
             log_list[msg_id-1]["replicated_ts"] = time.time()
@@ -185,6 +216,9 @@ def run_HTTP_server(server_class=ThreadedHTTPServer, handler_class=SimpleHTTPReq
     httpd = ThreadedHTTPServer(('', master_port), SimpleHTTPRequestHandler)
     logging.info(f'HTTP server started and listening on {master_port}')
     httpd.serve_forever()
+
+def heartbeats():
+    pass
 
 # Init for shared variables
 script_path = os.path.dirname(os.path.realpath(__file__))
