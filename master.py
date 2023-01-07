@@ -18,10 +18,11 @@ def get_config(key):
         except:
             raise
 
-
-# CountDownLatch implementation
-# https://superfastpython.com/thread-countdown-latch/
-# simple countdown latch, starts closed then opens once count is reached
+"""
+CountDownLatch implementation
+https://superfastpython.com/thread-countdown-latch/
+simple countdown latch, starts closed then opens once count is reached
+"""
 class CountDownLatch():
 
     # constructor
@@ -69,23 +70,37 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     lock = threading.Lock()
 
     def do_GET(self):
-        logging.info(f'[GET] {self.address_string()} requested list of messages')
         try:
-            if log_list:
-                log_list_sort = sorted(log_list, key=lambda msg: msg['id'])
-                log_list_fmt = [ 
-                                    {
-                                        "id": msg.get("id"),
-                                        "msg": msg.get("msg"),
-                                        "w": msg.get("w"),
-                                        "replicated_ts": datetime.utcfromtimestamp(msg.get("replicated_ts")).strftime("%Y-%m-%d %H:%M:%S.%f") if msg.get("replicated_ts") != None else "NOT REPLICATED"
-                                    } 
-                                for msg in log_list_sort
-                                ]
-                log_list_str = tabulate(log_list_fmt, headers="keys", tablefmt="simple_grid")
-                response = 'The replication log:\n' + log_list_str
+            if self.path == '/health':
+                logging.info(f'[GET] {self.address_string()} requested secondaries health status')      
+                secondary_health_fmt = [
+                                            {
+                                                "secondary_name" : secondary_host.get("name"),
+                                                "health_check_status" : None,
+                                                "health_check_ts" : None
+                                            } 
+                                        for secondary_host in secondary_hosts     
+                                        ]
+                secondary_health_str = tabulate(secondary_health_fmt, headers="keys", tablefmt="simple_grid")
+                response = "Secondaries health status:\n" + secondary_health_str
             else:
-                response = 'The replication log is empty'
+                logging.info(f'[GET] {self.address_string()} requested list of messages')    
+
+                if log_list:
+                    log_list_fmt = [ 
+                                        {
+                                            "id" : msg.get("id"),
+                                            "msg" : msg.get("msg"),
+                                            "w" : msg.get("w"),
+                                            "replicated_ts" : datetime.utcfromtimestamp(msg.get("replicated_ts")).strftime("%Y-%m-%d %H:%M:%S.%f") if msg.get("replicated_ts") != None else "NOT REPLICATED"
+                                        } 
+                                    for msg in log_list
+                                    ]
+                    log_list_str = tabulate(log_list_fmt, headers="keys", tablefmt="simple_grid")
+                    response = 'The replication log:\n' + log_list_str
+                else:
+                    response = 'The replication log is empty'
+    
             logging.info('[GET] ' + response)
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
@@ -163,10 +178,10 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
             # acquire the lock
             self.lock.acquire()
-            log_list_last_id = max(log_list, key=lambda msg:msg['id']).get('id') if log_list else 0
-            msg_id = log_list_last_id + 1
+            #log_list_last_index = max(log_list, key=lambda msg:msg['id']).get('id') if log_list else 0
+            msg_id = len(log_list) + 1
             msg_dict = {"id": msg_id, "msg": msg, "replicated_ts" : None, "w": w}
-            # append new message to log
+            # add new message to log
             log_list.append(msg_dict)
             logging.info(f"[POST] Received message \"" + msg_dict["msg"] + "\" has been added to log with id: " + str(msg_dict["id"]))
             # release the lock
@@ -181,8 +196,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 p = threading.Thread(target=replicate_msg, 
                                     name="Replicating msg_id = " + str(msg_dict["id"]) + " on " + secondary_host.get("name"),
                                     args=(secondary_host, msg_dict))
-                p.start()                            
-
+                p.start()
+            
             # wait for the latch to close
             latch.wait()
 
@@ -216,14 +231,34 @@ def run_HTTP_server(server_class=ThreadedHTTPServer, handler_class=SimpleHTTPReq
     logging.info(f'HTTP server started and listening on {master_port}')
     httpd.serve_forever()
 
+
 def heartbeats():
-    pass
+    for secondary_host in secondary_hosts:
+        url = f'http://{secondary_host.get("hostname")}:{secondary_host.get("port")}'
+        try:
+            response = requests.get(url, timeout=(3,1)) # (connect timeout, read timeout)
+            response_time = response.elapsed.total_seconds()
+            
+            if response.status_code == 200:
+                if response_time < 1:
+                    status = "Healthy"
+                else:
+                    status = "Suspected"
+                    logging.info(f'[Secodnary health check] {secondary_host.get("name")} is in SUSPECTED status')
+            else:
+                status = "Unhealthy"
+                logging.info(f'[Secodnary health check] {secondary_host.get("name")} is in UNHEALTHY status')
+        except (requests.ConnectionError, requests.Timeout) as e:
+                status = "Unhealthy"            
+                logging.info(f'[Secodnary health check] {secondary_host.get("name")} is in UNHEALTHY status')
+        except Exception as e:
+                logging.error(f"[Secodnary health check] Exception: {e}")
+
 
 # Init for shared variables
 script_path = os.path.dirname(os.path.realpath(__file__))
 hosts = get_config("Hosts")
 secondary_hosts = list(filter(lambda host: host.get("type") == "secondary" and host.get("active") == 1, hosts))
-
 log_list = []
 
 def main():
@@ -250,4 +285,4 @@ if __name__ == '__main__':
         ]
     )
     main()
-   
+

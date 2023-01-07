@@ -29,14 +29,13 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         logging.info(f'[GET] {self.address_string()} requested list of messages')
         try:
-            log_list_sort = sorted(log_list, key=lambda msg: msg['id'])
             gap_index = None
             # find first gap
-            for index, msg in enumerate(log_list_sort):
-                if msg.get("id") > (log_list_sort[index - 1].get("id") + 1 if index > 0 else 1):
+            for index, msg in enumerate(log_list):
+                if msg is None:
                     gap_index = index
+                    logging.info(f"gap_index= {gap_index}")
                     break
-            logging.info(f"gap_index= {gap_index}")
             if log_list and (gap_index is None or gap_index > 0):
                 log_list_fmt = [ 
                                     {
@@ -45,7 +44,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                         "w": msg.get("w"),
                                         "replicated_ts" : datetime.utcfromtimestamp(msg.get("replicated_ts")).strftime("%Y-%m-%d %H:%M:%S.%f")
                                     } 
-                                for index, msg in enumerate(log_list_sort) if gap_index is None or index < gap_index
+                                for index, msg in enumerate(log_list) if gap_index is None or index < gap_index
                                 ]
                 log_list_str = tabulate(log_list_fmt, headers="keys", tablefmt="simple_grid")
                 response = 'The replication log:\n' + log_list_str
@@ -69,6 +68,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(response.encode('utf-8'))
 
     def do_POST(self):
+        global log_list
         logging.info(f'[POST] {self.address_string()} sent a request to replicate message')
 
         try:
@@ -76,19 +76,26 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             body = self.rfile.read(content_length).decode("utf-8")
             msg_dict = json.loads(body)
 
-            # delay to test message ordrer, deduplication
+            # delay to test message total ordrer, deduplication
             if msg_dict["msg"] == "wait":
                 time.sleep(10)
 
-            # append new message to log
-            if not any(msg["id"] == msg_dict["id"] for msg in log_list):
+            # add new message to log
+            idx = msg_dict["id"]-1
+            if len(log_list) <= idx or log_list[idx] is None:
                 msg_dict["replicated_ts"] = time.time()
-                log_list.append(msg_dict)            
-                logging.info(f"[POST] Message with id = " + str(msg_dict["id"]) + " has been replicated")
+                if len(log_list) < idx:
+                    npads = idx - len(log_list) + 1
+                    log_list += [ None ] * npads
+                    log_list[idx] = msg_dict
+                elif log_list[idx] is None: 
+                    log_list[idx] = msg_dict   
+                else:
+                    log_list.append(msg_dict)    
+                response = f"Message with id = " + str(msg_dict["id"]) + " has been replicated"
             else:    
-                logging.info(f"[POST] Message with id = " + str(msg_dict["id"]) + " already exists in the log")
+                response = f"Message with id = " + str(msg_dict["id"]) + " already exists in the log"
             
-            response = f"The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated"            
             logging.info('[POST] ' + response)   
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
