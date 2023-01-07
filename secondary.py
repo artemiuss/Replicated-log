@@ -88,10 +88,10 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     npads = idx - len(log_list) + 1
                     log_list += [ None ] * npads
                     log_list[idx] = msg_dict
+                elif len(log_list) == idx:
+                    log_list.append(msg_dict)    
                 elif log_list[idx] is None: 
                     log_list[idx] = msg_dict   
-                else:
-                    log_list.append(msg_dict)    
                 response = f"Message with id = " + str(msg_dict["id"]) + " has been replicated"
             else:    
                 response = f"Message with id = " + str(msg_dict["id"]) + " already exists in the log"
