@@ -27,6 +27,15 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.path == '/health':
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Server', 'Secondary')
+            self.end_headers()
+            response = 'OK'
+            self.wfile.write(response.encode('utf-8'))
+            return
+        
         logging.info(f'[GET] {self.address_string()} requested list of messages')
         try:
             gap_index = None

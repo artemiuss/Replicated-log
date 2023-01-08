@@ -117,35 +117,33 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             response = response + '\n'
             self.wfile.write(response.encode('utf-8'))
 
+    def replicate_msg(latch, secondary_host, msg_dict):
+        url = f'http://{secondary_host.get("hostname")}:{secondary_host.get("port")}'    
+        thread_name =  threading.current_thread().name
+        logging.info(f"[POST] START {thread_name}")
+        sleep_delay = 1
+        while True:
+            try:
+                # https://requests.readthedocs.io/en/latest/user/advanced/#timeouts
+                response = requests.post(url, json=msg_dict, timeout=(3.5,None)) # (connect timeout, read timeout)
+                if response.status_code == 200:
+                    latch.count_down()
+                    logging.info(f"[POST]     {thread_name}. The message has been succesfully replicated")
+                    break
+            except (requests.ConnectionError, requests.Timeout) as e:
+                logging.info(f'[POST]     {thread_name}. {secondary_host.get("name")} not available. Retrying in {sleep_delay}s ...')
+            except Exception as e:
+                logging.error(f"[POST] {thread_name}. Exception: {e}")
+            finally:
+                time.sleep(sleep_delay)
+                # "smart" delays logic
+                if sleep_delay < 60:
+                    sleep_delay += 1
+                else:
+                    sleep_delay = 1
+        logging.info(f"[POST] END {thread_name}")
+
     def do_POST(self):
-        def replicate_msg(secondary_host, msg_dict):
-            url = f'http://{secondary_host.get("hostname")}:{secondary_host.get("port")}'    
-            host_id = secondary_host.get("id")        
-            thread_name =  threading.current_thread().name
-            logging.info(f"[POST] START {thread_name}")
-            sleep_delay = 1
-            while True:
-                try:
-                    # https://requests.readthedocs.io/en/latest/user/advanced/#timeouts
-                    response = requests.post(url, json=msg_dict, timeout=(3.5,None)) # (connect timeout, read timeout)
-
-                    if response.status_code == 200:
-                        latch.count_down()
-                        logging.info(f"[POST]     {thread_name}. The message has been succesfully replicated")
-                        break
-                except (requests.ConnectionError, requests.Timeout) as e:
-                    logging.info(f'[POST]     {thread_name}. {secondary_host.get("name")} not available. Retrying in {sleep_delay}s ...')
-                except Exception as e:
-                    logging.error(f"[POST] {thread_name}. Exception: {e}")
-                finally:
-                    time.sleep(sleep_delay)
-                    # "smart" delays logic
-                    if sleep_delay < 60:
-                        sleep_delay += 1
-                    else:
-                        sleep_delay = 1
-            logging.info(f"[POST] END {thread_name}")
-
         logging.info(f'[POST] {self.address_string()} sent a request to append message')
         try:
             content_length = int(self.headers['Content-Length'])
@@ -203,9 +201,9 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             latch = CountDownLatch(w-1)
             
             for secondary_host in secondary_hosts:
-                t = threading.Thread(target=replicate_msg, 
+                t = threading.Thread(target=self.replicate_msg, 
                                     name="Replicating msg_id = " + str(msg_dict["id"]) + " on " + secondary_host.get("name"),
-                                    args=(secondary_host, msg_dict))
+                                    args=(latch, secondary_host, msg_dict))
                 t.start()
             
             # wait for the latch to close
@@ -241,36 +239,51 @@ def run_HTTP_server(server_class=ThreadedHTTPServer, handler_class=SimpleHTTPReq
     logging.info(f'HTTP server started and listening on {master_port}')
     httpd.serve_forever()
 
+
+def health_check(secondary_host):
+    global quorum    
+    url = f'http://{secondary_host.get("hostname")}:{secondary_host.get("port")}/health'
+    try:
+        response = requests.get(url, timeout=(3,1)) # (connect timeout, read timeout)
+        response_time = response.elapsed.total_seconds()
+        
+        if response.status_code == 200:
+            if response_time < 1:
+                secondary_hosts_status[secondary_host["id"]] = "Healthy"
+                quorum = True
+            else:
+                secondary_hosts_status[secondary_host["id"]] = "Suspected"
+                logging.info(f'[Heartbeat check] {secondary_host.get("name")} is in SUSPECTED status')
+        else:
+            secondary_hosts_status[secondary_host["id"]] = "Unhealthy"
+            logging.info(f'[Heartbeat check] {secondary_host.get("name")} is in UNHEALTHY status')
+    except (requests.ConnectionError, requests.Timeout) as e:
+        secondary_hosts_status[secondary_host["id"]] = "Unhealthy"            
+        logging.info(f'[Heartbeat check] {secondary_host.get("name")} is in UNHEALTHY status')
+    except Exception as e:
+        logging.error(f'[Heartbeat check] Exception: {e}')
+
 def heartbeats():
     global quorum
+    if quorum is None:
+        time.sleep(1)
     while True:
+        quorum_prev = quorum
         quorum = False
+        threads = []        
         for secondary_host in secondary_hosts:
-            url = f'http://{secondary_host.get("hostname")}:{secondary_host.get("port")}'
-            try:
-                response = requests.get(url, timeout=(3,1)) # (connect timeout, read timeout)
-                response_time = response.elapsed.total_seconds()
-                
-                if response.status_code == 200:
-                    if response_time < 1:
-                        secondary_hosts_status[secondary_host["id"]] = "Healthy"
-                        quorum = True
-                    else:
-                        secondary_hosts_status[secondary_host["id"]] = "Suspected"
-                        logging.info(f'[Heartbeat check] {secondary_host.get("name")} is in SUSPECTED status')
-                else:
-                    secondary_hosts_status[secondary_host["id"]] = "Unhealthy"
-                    logging.info(f'[Heartbeat check] {secondary_host.get("name")} is in UNHEALTHY status')
-            except (requests.ConnectionError, requests.Timeout) as e:
-                    secondary_hosts_status[secondary_host["id"]] = "Unhealthy"            
-                    logging.info(f'[Heartbeat check] {secondary_host.get("name")} is in UNHEALTHY status')
-            except Exception as e:
-                    logging.error(f"[Heartbeat check] Exception: {e}")
-            finally: 
-                if not quorum:
-                    logging.info(f'[Heartbeat check] The Master has been switched into read-only mode. Waiting for Secondaries quorum')
-        
+            t = threading.Thread(target=health_check, 
+                                name="[Heartbeat check] Checking " + secondary_host.get("name") + " health status",
+                                args=(secondary_host,))
+            threads.append(t)
+            t.start()
+        for t in threads:
+            t.join()
         time.sleep(5)
+        if not quorum:
+            logging.info(f'[Heartbeat check] Master has been switched into read-only mode. Waiting for Secondaries quorum')
+        if quorum and not quorum_prev and not quorum_prev is None:
+            logging.info(f'[Heartbeat check] The Secondaries quorum has been restored. Master is ready to accept messages append requests')
 
 # Init for shared variables
 script_path = os.path.dirname(os.path.realpath(__file__))
@@ -278,7 +291,7 @@ hosts = get_config("Hosts")
 secondary_hosts = list(filter(lambda host: host.get("type") == "secondary" and host.get("active") == 1, hosts))
 secondary_hosts_status = {secondary_host["id"]:None for secondary_host in secondary_hosts}
 log_list = []
-quorum = False
+quorum = None
 
 def main():
     """
