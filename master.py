@@ -76,8 +76,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 secondary_health_fmt = [
                                             {
                                                 "secondary_name" : secondary_host.get("name"),
-                                                "health_check_status" : None,
-                                                "health_check_ts" : None
+                                                "health_check_status" : secondary_hosts_status[secondary_host["id"]]
                                             } 
                                         for secondary_host in secondary_hosts     
                                         ]
@@ -175,7 +174,18 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 response = response + '\n'
                 self.wfile.write(response.encode('utf-8'))
                 logging.error(f"[POST] Invalid POST request. Received message {body} has incorrect form. Exception: {e}", stack_info=debug)
-
+            
+            if not quorum:
+                response = f"There is no Secondaries quorum. The Master has been switched into read-only mode and does not accept messages append requests"
+                logging.info('[POST] ' + response)
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                self.send_header('Server', 'Master')
+                self.end_headers()
+                response = response + '\n'
+                self.wfile.write(response.encode('utf-8'))                
+                return
+            
             # acquire the lock
             self.lock.acquire()
             #log_list_last_index = max(log_list, key=lambda msg:msg['id']).get('id') if log_list else 0
@@ -186,24 +196,24 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             logging.info(f"[POST] Received message \"" + msg_dict["msg"] + "\" has been added to log with id: " + str(msg_dict["id"]))
             # release the lock
             self.lock.release()
-
+            
             logging.info(f'[POST] Replicating the message')
-
+            
             # create the countdown latch
             latch = CountDownLatch(w-1)
-
+            
             for secondary_host in secondary_hosts:
-                p = threading.Thread(target=replicate_msg, 
+                t = threading.Thread(target=replicate_msg, 
                                     name="Replicating msg_id = " + str(msg_dict["id"]) + " on " + secondary_host.get("name"),
                                     args=(secondary_host, msg_dict))
-                p.start()
+                t.start()
             
             # wait for the latch to close
             latch.wait()
-
+            
             #set ts
             log_list[msg_id-1]["replicated_ts"] = time.time()
-
+            
             response = f"The message msg_id = " + str(msg_dict["id"]) +", msg = \"" + msg_dict["msg"] + "\" has been succesfully replicated"
             logging.info('[POST] ' + response)
             self.send_response(200)
@@ -231,35 +241,44 @@ def run_HTTP_server(server_class=ThreadedHTTPServer, handler_class=SimpleHTTPReq
     logging.info(f'HTTP server started and listening on {master_port}')
     httpd.serve_forever()
 
-
 def heartbeats():
-    for secondary_host in secondary_hosts:
-        url = f'http://{secondary_host.get("hostname")}:{secondary_host.get("port")}'
-        try:
-            response = requests.get(url, timeout=(3,1)) # (connect timeout, read timeout)
-            response_time = response.elapsed.total_seconds()
-            
-            if response.status_code == 200:
-                if response_time < 1:
-                    status = "Healthy"
+    global quorum
+    while True:
+        quorum = False
+        for secondary_host in secondary_hosts:
+            url = f'http://{secondary_host.get("hostname")}:{secondary_host.get("port")}'
+            try:
+                response = requests.get(url, timeout=(3,1)) # (connect timeout, read timeout)
+                response_time = response.elapsed.total_seconds()
+                
+                if response.status_code == 200:
+                    if response_time < 1:
+                        secondary_hosts_status[secondary_host["id"]] = "Healthy"
+                        quorum = True
+                    else:
+                        secondary_hosts_status[secondary_host["id"]] = "Suspected"
+                        logging.info(f'[Heartbeat check] {secondary_host.get("name")} is in SUSPECTED status')
                 else:
-                    status = "Suspected"
-                    logging.info(f'[Secodnary health check] {secondary_host.get("name")} is in SUSPECTED status')
-            else:
-                status = "Unhealthy"
-                logging.info(f'[Secodnary health check] {secondary_host.get("name")} is in UNHEALTHY status')
-        except (requests.ConnectionError, requests.Timeout) as e:
-                status = "Unhealthy"            
-                logging.info(f'[Secodnary health check] {secondary_host.get("name")} is in UNHEALTHY status')
-        except Exception as e:
-                logging.error(f"[Secodnary health check] Exception: {e}")
-
+                    secondary_hosts_status[secondary_host["id"]] = "Unhealthy"
+                    logging.info(f'[Heartbeat check] {secondary_host.get("name")} is in UNHEALTHY status')
+            except (requests.ConnectionError, requests.Timeout) as e:
+                    secondary_hosts_status[secondary_host["id"]] = "Unhealthy"            
+                    logging.info(f'[Heartbeat check] {secondary_host.get("name")} is in UNHEALTHY status')
+            except Exception as e:
+                    logging.error(f"[Heartbeat check] Exception: {e}")
+            finally: 
+                if not quorum:
+                    logging.info(f'[Heartbeat check] The Master has been switched into read-only mode. Waiting for Secondaries quorum')
+        
+        time.sleep(5)
 
 # Init for shared variables
 script_path = os.path.dirname(os.path.realpath(__file__))
 hosts = get_config("Hosts")
 secondary_hosts = list(filter(lambda host: host.get("type") == "secondary" and host.get("active") == 1, hosts))
+secondary_hosts_status = {secondary_host["id"]:None for secondary_host in secondary_hosts}
 log_list = []
+quorum = False
 
 def main():
     """
@@ -267,6 +286,9 @@ def main():
     """
     logging.info('Master host has been started')
     try:
+        t = threading.Thread(target=heartbeats)
+        t.start()        
+
         run_HTTP_server()
     except Exception as e:
         logging.error(f"Exception: {e}", stack_info=debug)
