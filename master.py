@@ -321,6 +321,11 @@ if __name__ == '__main__':
     debug = get_config("debug")
     logfile_name = datetime.now().strftime('master.log')
     logfile_path = os.path.join(script_path, logfile_name)
+    try:
+        os.remove(logfile_name)
+    except OSError:
+        pass
+
     logging.basicConfig(
         format='%(asctime)s %(levelname)s %(message)s',
         level=logging.DEBUG if debug else logging.INFO,
