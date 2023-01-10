@@ -74,7 +74,18 @@ curl localhost:8081
 curl localhost:8082
 ```
 
-3. Clean-Up
+4. Testing
+```
+docker network disconnect replicated-log_my-net secondary1
+docker network connect replicated-log_my-net secondary1
+```
+
+5. Stop
+```
+docker-compose down
+```
+
+6. Clean-Up
 ```
 docker-compose down --rmi 'all'
 ```
