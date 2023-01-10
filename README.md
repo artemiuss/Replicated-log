@@ -3,7 +3,6 @@
 Team 6:
 - Artem Avetian
 - Dmytro Kushnir
-- Nikita Korsun
 
 ## Simple Echo-Server application
 The `echo-server.py` implements simple Echo-Server application. Accept requests on the *8080* port. Supports only GET and POST requests.
