@@ -74,7 +74,7 @@ curl localhost:8081
 curl localhost:8082
 ```
 
-4. Testing
+4. Testing eventual consistency, exactly-once delivering, total order, deduplication
 ```
 docker network disconnect replicated-log_my-net secondary1
 docker network connect replicated-log_my-net secondary1
