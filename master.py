@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-import sys, os, json, time, logging, requests
+import sys, os, json, time, logging, requests, threading
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from jsonschema import validate
 from tabulate import tabulate
-import threading
+from random import randint
 
 def get_config(key):
     """
@@ -139,9 +139,9 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 time.sleep(sleep_delay)
                 # "smart" delays logic
                 if sleep_delay < 60:
-                    sleep_delay += 1
+                    sleep_delay += randint(1, 10)
                 else:
-                    sleep_delay = 1
+                    sleep_delay = randint(1, 10)
         logging.info(f"[POST] END {thread_name}")
 
     def do_POST(self):
