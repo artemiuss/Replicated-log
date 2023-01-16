@@ -243,33 +243,28 @@ def run_HTTP_server(server_class=ThreadedHTTPServer, handler_class=SimpleHTTPReq
     logging.info(f'HTTP server started and listening on {master_port}')
     httpd.serve_forever()
 
-
 def health_check(secondary_host):
     try:
         status_prev = secondary_statuses[secondary_host["id"]]
         url = f'http://{secondary_host.get("hostname")}:{secondary_host.get("port")}/health'
-        requests_failed = 0
-
-        for _ in range(5):
-            try:
-                response = requests.get(url, timeout=(3,1)) # (connect timeout, read timeout)
-                if response.status_code != 200 or response.elapsed.total_seconds() > 1:
-                    requests_failed += 1
-            except (requests.ConnectionError, requests.Timeout) as e:
-                requests_failed += 1
-            finally:
-                time.sleep(0.5)    
-            
-        if requests_failed > 1:
-            secondary_statuses[secondary_host["id"]] = "Unhealthy"            
-        elif requests_failed == 1:
-            secondary_statuses[secondary_host["id"]] = "Suspected"
-        else:
+        response = requests.get(url, timeout=(3,1)) # (connect timeout, read timeout)
+        request_failed = False
+        
+        if response.status_code == 200:
             secondary_statuses[secondary_host["id"]] = "Healthy"
             secondary_locks[secondary_host["id"]].count_down()
+        else:
+            request_failed = True
+    except (requests.ConnectionError, requests.Timeout) as e:
+        request_failed = True        
     except Exception as e:
         logging.error(f'[Heartbeat check] Exception: {e}')
     finally:
+        if request_failed:
+            if secondary_statuses[secondary_host["id"]] == "Healthy":
+                secondary_statuses[secondary_host["id"]] = "Suspected"
+            elif secondary_statuses[secondary_host["id"]] == "Suspected":
+                secondary_statuses[secondary_host["id"]] = "Unhealthy"
         if secondary_statuses[secondary_host["id"]] != status_prev and not (secondary_statuses[secondary_host["id"]] == "Healthy" and status_prev is None):
             logging.info(f'[Heartbeat check] {secondary_host.get("name")} is in {secondary_statuses[secondary_host["id"]]} status')
 
