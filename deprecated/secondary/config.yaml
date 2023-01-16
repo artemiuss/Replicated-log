@@ -1,5 +1,0 @@
-port: 8081
-master_url: localhost
-master_port: 8080
-log_dir: log
-delay: 10
