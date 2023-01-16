@@ -174,7 +174,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 self.wfile.write(response.encode('utf-8'))
                 logging.error(f"[POST] Invalid POST request. Received message {body} has incorrect form. Exception: {e}", stack_info=debug)
             
-            if not quorum:
+            # Quorum check
+            if not get_quorum():
                 response = f"There is no Secondaries quorum. The Master has been switched into read-only mode and does not accept messages append requests"
                 logging.info('[POST] ' + response)
                 self.send_response(200)
@@ -244,37 +245,44 @@ def run_HTTP_server(server_class=ThreadedHTTPServer, handler_class=SimpleHTTPReq
 
 
 def health_check(secondary_host):
-    global quorum    
     try:
         status_prev = secondary_statuses[secondary_host["id"]]
         url = f'http://{secondary_host.get("hostname")}:{secondary_host.get("port")}/health'
-        response = requests.get(url, timeout=(3,1)) # (connect timeout, read timeout)
-        response_time = response.elapsed.total_seconds()
-        
-        if response.status_code == 200:
-            if response_time < 1:
-                secondary_statuses[secondary_host["id"]] = "Healthy"
-                secondary_locks[secondary_host["id"]].count_down()
-                quorum = True
-            else:
-                secondary_statuses[secondary_host["id"]] = "Suspected"
+        requests_failed = 0
+
+        for _ in range(5):
+            try:
+                response = requests.get(url, timeout=(3,1)) # (connect timeout, read timeout)
+                if response.status_code != 200 or response.elapsed.total_seconds() > 1:
+                    requests_failed += 1
+            except (requests.ConnectionError, requests.Timeout) as e:
+                requests_failed += 1
+            finally:
+                time.sleep(0.5)    
+            
+        if requests_failed > 1:
+            secondary_statuses[secondary_host["id"]] = "Unhealthy"            
+        elif requests_failed == 1:
+            secondary_statuses[secondary_host["id"]] = "Suspected"
         else:
-            secondary_statuses[secondary_host["id"]] = "Unhealthy"
-    except (requests.ConnectionError, requests.Timeout) as e:
-        secondary_statuses[secondary_host["id"]] = "Unhealthy"            
+            secondary_statuses[secondary_host["id"]] = "Healthy"
+            secondary_locks[secondary_host["id"]].count_down()
     except Exception as e:
         logging.error(f'[Heartbeat check] Exception: {e}')
     finally:
         if secondary_statuses[secondary_host["id"]] != status_prev and not (secondary_statuses[secondary_host["id"]] == "Healthy" and status_prev is None):
             logging.info(f'[Heartbeat check] {secondary_host.get("name")} is in {secondary_statuses[secondary_host["id"]]} status')
 
+def get_quorum():
+    if any(value is None or value == "Healthy" for value in secondary_statuses.values()):
+        return True
+    else:
+        return False
+
 def heartbeats():
-    global quorum
-    if quorum is None:
-        time.sleep(1)
+    time.sleep(1)
+    quorum = None
     while True:
-        quorum_prev = quorum
-        quorum = False
         threads = []
         for secondary_host in secondary_hosts:
             if secondary_statuses[secondary_host["id"]] is None or secondary_statuses[secondary_host["id"]] == "Healthy":
@@ -289,6 +297,10 @@ def heartbeats():
         for t in threads:
             t.join()
         time.sleep(5)
+
+        quorum_prev = quorum
+        quorum = get_quorum()
+
         if not quorum and not quorum == quorum_prev:
             logging.info(f'[Heartbeat check] Master has been switched into read-only mode. Waiting for Secondaries quorum')
         if quorum and not quorum == quorum_prev and not quorum_prev is None:
@@ -301,7 +313,6 @@ secondary_hosts = list(filter(lambda host: host.get("type") == "secondary" and h
 secondary_statuses = {secondary_host["id"]:None for secondary_host in secondary_hosts}
 secondary_locks = {}
 log_list = []
-quorum = None
 
 def main():
     """
