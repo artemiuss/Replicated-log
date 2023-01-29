@@ -125,8 +125,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         while True:
             time.sleep(sleep_delay)
             try:
-                if secondary_locks[secondary_host["id"]] is not None:
-                    secondary_locks[secondary_host["id"]].wait()
+                secondary_locks[secondary_host["id"]].wait()
                 # https://requests.readthedocs.io/en/latest/user/advanced/#timeouts
                 response = requests.post(url, json=msg_dict, timeout=(3.5,None)) # (connect timeout, read timeout)
                 if response.status_code == 200:
@@ -276,12 +275,12 @@ def get_quorum():
         return False
 
 def heartbeats():
-    time.sleep(5)
+    time.sleep(3)
     quorum = None
     while True:
         threads = []
         for secondary_host in secondary_hosts:
-            if secondary_statuses[secondary_host["id"]] is None or secondary_statuses[secondary_host["id"]] == "Healthy":
+            if secondary_statuses[secondary_host["id"]] == "Healthy":
                 secondary_locks[secondary_host["id"]] = CountDownLatch(1)
             t = threading.Thread(
                                     target=health_check,
@@ -307,7 +306,7 @@ script_path = os.path.dirname(os.path.realpath(__file__))
 hosts = get_config("Hosts")
 secondary_hosts = list(filter(lambda host: host.get("type") == "secondary" and host.get("active") == 1, hosts))
 secondary_statuses = {secondary_host["id"]:None for secondary_host in secondary_hosts}
-secondary_locks = {secondary_host["id"]:None for secondary_host in secondary_hosts}
+secondary_locks = {secondary_host["id"]:CountDownLatch(1) for secondary_host in secondary_hosts}
 log_list = []
 
 def main():
