@@ -118,25 +118,26 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(response.encode('utf-8'))
 
     def replicate_msg(self, latch, secondary_host, msg_dict):
-        url = f'http://{secondary_host.get("hostname")}:{secondary_host.get("port")}'    
+        url = f'http://{secondary_host.get("hostname")}:{secondary_host.get("port")}'
         thread_name =  threading.current_thread().name
         logging.info(f"[POST] START {thread_name}")
-        sleep_delay = 1
+        sleep_delay = 0
         while True:
+            time.sleep(sleep_delay)
             try:
-                secondary_locks[secondary_host["id"]].wait()
+                if secondary_locks[secondary_host["id"]] is not None:
+                    secondary_locks[secondary_host["id"]].wait()
                 # https://requests.readthedocs.io/en/latest/user/advanced/#timeouts
                 response = requests.post(url, json=msg_dict, timeout=(3.5,None)) # (connect timeout, read timeout)
                 if response.status_code == 200:
                     latch.count_down()
-                    logging.info(f"[POST]     {thread_name}. The message has been succesfully replicated")
+                    logging.info(f"[POST] {thread_name}. The message has been succesfully replicated")
                     break
-            except (requests.ConnectionError, requests.Timeout) as e:
-                logging.info(f'[POST]     {thread_name}. {secondary_host.get("name")} not available. Retrying in {sleep_delay}s ...')
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+                logging.info(f'[POST] {thread_name}. {secondary_host.get("name")} not available. Retrying in {sleep_delay}s ...')
             except Exception as e:
-                logging.error(f"[POST] {thread_name}. Exception: {e}")
+                logging.error(f"[POST] {thread_name}. An exception of type {type(e).__name__} occurred. Arguments: {e.args}")
             finally:
-                time.sleep(sleep_delay)
                 # "smart" delays logic
                 if sleep_delay < 60:
                     sleep_delay += randint(1, 10)
@@ -183,7 +184,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 self.send_header('Server', 'Master')
                 self.end_headers()
                 response = response + '\n'
-                self.wfile.write(response.encode('utf-8'))                
+                self.wfile.write(response.encode('utf-8'))
                 return
             
             # acquire the lock
@@ -256,12 +257,12 @@ def health_check(secondary_host):
         else:
             request_failed = True
     except (requests.ConnectionError, requests.Timeout) as e:
-        request_failed = True        
+        request_failed = True
     except Exception as e:
         logging.error(f'[Heartbeat check] Exception: {e}')
     finally:
         if request_failed:
-            if secondary_statuses[secondary_host["id"]] == "Healthy":
+            if secondary_statuses[secondary_host["id"]] is None or secondary_statuses[secondary_host["id"]] == "Healthy":
                 secondary_statuses[secondary_host["id"]] = "Suspected"
             elif secondary_statuses[secondary_host["id"]] == "Suspected":
                 secondary_statuses[secondary_host["id"]] = "Unhealthy"
@@ -275,7 +276,7 @@ def get_quorum():
         return False
 
 def heartbeats():
-    time.sleep(1)
+    time.sleep(5)
     quorum = None
     while True:
         threads = []
@@ -283,7 +284,7 @@ def heartbeats():
             if secondary_statuses[secondary_host["id"]] is None or secondary_statuses[secondary_host["id"]] == "Healthy":
                 secondary_locks[secondary_host["id"]] = CountDownLatch(1)
             t = threading.Thread(
-                                    target=health_check, 
+                                    target=health_check,
                                     name="[Heartbeat check] Checking " + secondary_host.get("name") + " health status",
                                     args=(secondary_host,)
                                 )
@@ -306,7 +307,7 @@ script_path = os.path.dirname(os.path.realpath(__file__))
 hosts = get_config("Hosts")
 secondary_hosts = list(filter(lambda host: host.get("type") == "secondary" and host.get("active") == 1, hosts))
 secondary_statuses = {secondary_host["id"]:None for secondary_host in secondary_hosts}
-secondary_locks = {}
+secondary_locks = {secondary_host["id"]:None for secondary_host in secondary_hosts}
 log_list = []
 
 def main():
@@ -316,7 +317,7 @@ def main():
     logging.info('Master host has been started')
     try:
         t = threading.Thread(target=heartbeats)
-        t.start()        
+        t.start()
 
         run_HTTP_server()
     except Exception as e:

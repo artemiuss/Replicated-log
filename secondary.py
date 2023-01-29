@@ -46,13 +46,13 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     logging.info(f"gap_index= {gap_index}")
                     break
             if log_list and (gap_index is None or gap_index > 0):
-                log_list_fmt = [ 
+                log_list_fmt = [
                                     {
                                         "id": msg.get("id"),
                                         "msg": msg.get("msg"),
                                         "w": msg.get("w"),
                                         "replicated_ts" : datetime.utcfromtimestamp(msg.get("replicated_ts")).strftime("%Y-%m-%d %H:%M:%S.%f")
-                                    } 
+                                    }
                                 for index, msg in enumerate(log_list) if gap_index is None or index < gap_index
                                 ]
                 log_list_str = tabulate(log_list_fmt, headers="keys", tablefmt="simple_grid")
@@ -98,14 +98,14 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     log_list += [ None ] * npads
                     log_list[idx] = msg_dict
                 elif len(log_list) == idx:
-                    log_list.append(msg_dict)    
-                elif log_list[idx] is None: 
-                    log_list[idx] = msg_dict   
+                    log_list.append(msg_dict)
+                elif log_list[idx] is None:
+                    log_list[idx] = msg_dict
                 response = f"Message with id = " + str(msg_dict["id"]) + " has been replicated"
             else:    
                 response = f"Message with id = " + str(msg_dict["id"]) + " already exists in the log"
             
-            logging.info('[POST] ' + response)   
+            logging.info('[POST] ' + response)
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Server', 'Secondary')
@@ -122,7 +122,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.send_header('Server', 'Secondary')
             self.end_headers()
             response = response + '\n'
-            self.wfile.write(response.encode('utf-8'))  
+            self.wfile.write(response.encode('utf-8'))
 
     def log_message(self, format, *args):
         pass
